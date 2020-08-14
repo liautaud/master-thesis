@@ -2,7 +2,7 @@
 
 LaTeX sources for my Master thesis on the garbage collection of a decentralized data store.
 
-➡️ *The latest PDF release is available [here](https://github.com/liautaud/master-thesis/releases/download/latest/liautaud-master-thesis.pdf)*.
+➡️ *The latest PDF release is available [here](https://github.com/liautaud/master-thesis/releases/latest/download/liautaud-master-thesis.pdf)*.
 
 
 ### Abstract.
