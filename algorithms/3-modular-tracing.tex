@@ -1,0 +1,26 @@
+\begin{figure}[!ht]
+  \caption{Modular tracing collection.}
+  \label{alg:modular-tracing}
+
+  \centering
+  \begin{lstlisting}
+atomic Collect():
+    marked <- mark()
+    backend.heap.Filter(λh. h ∈ marked)
+
+mark():
+    # Stack of all the grey objects.
+    pending <- Roots()
+
+    # Set of all the black objects.
+    marked <- ∅
+
+    while pending $\neq$ ∅:
+        o <- pop(pending)
+        if hash(o) ∉ marked:
+            marked <- marked ∪ {hash(o)}
+            pending <- pending ∪ successors(o)
+
+    return marked
+\end{lstlisting}
+\end{figure}

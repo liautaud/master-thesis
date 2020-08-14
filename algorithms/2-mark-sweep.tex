@@ -1,0 +1,31 @@
+\begin{figure}[!ht]
+  \caption{Simple mark-and-sweep collection (adapted from Algorithm 2.1 of \cite{handbook}).}
+  \label{alg:mark-sweep}
+
+  \centering
+  \begin{lstlisting}
+atomic Collect():
+    marked $\leftarrow$ mark()
+    sweep(marked)
+
+mark():
+    # Stack of all the grey objects.
+    pending $\leftarrow$ Roots()
+
+    # Set of all the black objects.
+    marked $\leftarrow$ $\emptyset$
+
+    while pending $\neq$ $\emptyset$:
+        o $\leftarrow$ pop(pending)
+        if hash(o) $\not\in$ marked:
+            marked $\leftarrow$ marked $\cup$ {hash(o)}
+            pending $\leftarrow$ pending $\cup$ successors(o)
+
+    return marked
+
+sweep(marked):
+    for o $\in$ backend.heap.All():
+        if hash(o) $\not\in$ marked:
+            backend.heap.Free(o)
+\end{lstlisting}
+\end{figure}

@@ -1,0 +1,28 @@
+\begin{figure}[!ht]
+  \caption{Partial collection of objects younger than $\theta$.}
+  \label{alg:partial-gen}
+
+  \centering
+  \begin{lstlisting}
+# Partial collection of objects younger than $\theta$.
+atomic Collect($\Gamma$, $\theta$):
+    marked $\rightarrow$ mark($\Gamma$, $\theta$)
+    backend.heap.Filter($\lambda$h. $\Gamma$(h) < $\Gamma$(hash($\theta$)) or h $\in$ marked)
+
+# Mark the subgraph corresponding to objects younger than $\theta$.
+mark($\Gamma$, $\theta$):
+    # Stack of all the grey objects.
+    pending $\rightarrow$ Roots()
+
+    # Set of all the black objects.
+    marked $\rightarrow$ $\emptyset$
+
+    while pending $\neq$ $\emptyset$:
+        o $\rightarrow$ pop(pending)
+        if $\Gamma$(hash(o)) $\geq$ $\Gamma$(hash($\theta$)) and hash(o) $\not\in$ marked:
+            marked $\rightarrow$ marked $\cup$ {hash(o)}
+            pending $\rightarrow$ pending $\cup$ successors(o)
+
+    return marked
+\end{lstlisting}
+\end{figure}

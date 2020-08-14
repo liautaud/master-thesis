@@ -1,0 +1,48 @@
+%% Configuration used for TikZ figures.
+%% Taken from https://github.com/CraigFe/git-store-diagram/.
+
+% TikZ libraries.
+\usetikzlibrary{backgrounds}
+\usetikzlibrary{positioning}
+\usetikzlibrary{calc}
+\usetikzlibrary{decorations.pathreplacing}
+
+% Color definitions.
+\definecolor{TabLightOrange}{RGB}{255,187,120}
+\definecolor{TabOrange}{RGB}{255,127,14}
+\definecolor{TabLightBlue}{RGB}{174,199,232}
+\definecolor{TabBlue}{RGB}{31,119,180}
+\definecolor{TabGreen}{RGB}{44,160,44}
+\definecolor{TabLightGreen}{RGB}{152,223,138}
+\definecolor{TabSalmon}{RGB}{255,152,150}
+\definecolor{TabRed}{RGB}{214,39,40}
+\definecolor{TabPurple}{RGB}{148,103,189}
+\definecolor{TabLightPurple}{RGB}{197,176,213}
+\definecolor{TabLightPink}{RGB}{247,182,210}
+\definecolor{TabPink}{RGB}{227,119,194}
+\definecolor{TabLightBrown}{RGB}{196,156,148}
+\definecolor{TabBrown}{RGB}{140,86,75}
+\definecolor{TabGray}{RGB}{127,127,127}
+\definecolor{TabOlive}{RGB}{188,189,34}
+\definecolor{TabLightOlive}{RGB}{219,219,141}
+\definecolor{TabLightGray}{RGB}{199,199,199}
+\definecolor{TabLightCyan}{RGB}{158,218,229}
+\definecolor{TabCyan}{RGB}{23,190,207}
+
+% Spacing definitions.
+\def\storespace{0.5}
+\def\boxspace{0.3}
+\def\commitwidth{2cm}
+\def\commitheight{1cm}
+\def\blobwidth{7mm}
+\def\blobheight{7mm}
+
+% Various TikZ styles and commands.
+\tikzstyle{arrow} = [thick,->,>=stealth]
+
+\newcommand{\tikzmark}[2][]{%
+  \tikz[remember picture,overlay]\coordinate[#1](#2);%
+}
+
+\renewcommand*{\ttdefault}{npxtt}
+\def\blockcolor{black!70}

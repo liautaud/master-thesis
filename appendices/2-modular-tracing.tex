@@ -1,0 +1,71 @@
+\section{OCaml implementation of modular tracing collection.}
+\label{app:modular-tracing}
+
+\setminted{fontsize=\footnotesize,baselinestretch=1}
+\begin{minted}{ocaml}
+let mark ?(roots = `Branches) t =
+  let pending = Stack.create () in
+  let marked = OGraph.Table.create 2048 in
+  (* Find the entry-points for the graph traversal. *)
+  ( match roots with
+  | `Branches ->
+      (* Lists the commits currently associated to the branches. *)
+      Branches.list t >>= fun branches ->
+      Lwt_list.map_p (Branches.get_commit_hash t) branches
+  | `List commits ->
+      (* Lets the user specify a custom list of commits as roots. *)
+      commits |> List.map Commits.to_hash |> Lwt.return )
+  >|= List.map (fun c -> `Commit c)
+  >>= fun entrypoints ->
+  let pred = pred ~full:true t in
+  let mark key level = OGraph.Table.add marked key level in
+  let has_mark key = OGraph.Table.mem marked key in
+  (* Add the entrypoints to the set of pending objects. *)
+  List.iter (fun k -> Stack.push (k, 0) pending) entrypoints;
+  (* Traverse the graph and mark the encountered objects. *)
+  let rec visit () =
+    match Stack.top pending with
+    | exception Stack.Empty ->
+        Lwt.return marked
+    | key, level ->
+        if has_mark key then (
+          ignore (Stack.pop pending);
+          (visit [@tailcall]) () )
+        else (
+          incr count;
+          mark key level;
+          pred key >>= fun keys ->
+          List.iter
+            (fun (_, k) ->
+              if not (has_mark k) then
+                Stack.push (k, level + 1) pending)
+            keys;
+          (visit [@tailcall]) () )
+  in
+  visit ()
+
+(** [cleanup ~roots t] runs the garbage collector on the object graph of
+    database [t]. All the commits, nodes and blobs which are not reachable
+    from [roots]–which defaults to all the branches of the database–will be
+    deleted from their back-end stores. *)
+let cleanup :
+    ?roots:[ `Branches | `List of commit list ] -> t -> unit Lwt.t =
+    fun ?roots t ->
+  Log.info (fun l -> l "Starting the garbage collector.");
+
+  (* Start the tracing algorithm, and retrieve the black objects. *)
+  Lwt_mutex.with_lock t.write_lock (fun () ->
+    mark ?roots t >>= fun marked ->
+      (* Filter the stores to keep only the black objects. *)
+      Backend.Commits.filter (commits_store t) (fun k ->
+          OGraph.Table.mem marked
+            (`Commit (CH (Commit.Digest.serialize k))))
+      >>= fun () ->
+      Backend.Nodes.filter (nodes_store t) (fun k ->
+          OGraph.Table.mem marked
+            (`Node (NH (Node.Digest.serialize k))))
+      >>= fun () ->
+      Backend.Blobs.filter (blobs_store t) (fun k ->
+          OGraph.Table.mem marked
+            (`Blob (BH (Blob.Digest.serialize k)))))
+\end{minted}

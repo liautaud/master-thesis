@@ -1,0 +1,250 @@
+\begin{figure}[ht]
+  \caption{Object graph of a Git repository.}
+  \label{fig:object-graph}
+
+  \centering
+  \begin{tikzpicture}[ remember picture , every node/.style={font=\footnotesize\sffamily}
+      , hashcirc/.style={draw=black, fill=black!10, circle, inner sep=0pt, minimum size=6pt}
+      , hash/.style={font=\scriptsize\ttfamily}
+      , commit/.style = {
+          , rectangle , rounded corners , inner sep = 0 , fill=TabRed!5 , draw=\blockcolor , line width=0.75pt,
+          , minimum width=\commitwidth , minimum height = \commitheight
+        }
+      , gitptr/.style={draw=TabBlue!60}
+      , arrow={->,>=stealth}
+    ]
+
+    \def\linespacing{15pt}
+    \def\commit[#1]#2(#3)#4(#5)#6(#7) {
+      \begin{scope}[local bounding box=#1]
+        \begin{scope}[local bounding box=inner-#1]
+          \node (#1-init) at (#3) {\textbf{commit}};
+          \node[text width = 6em, align=center, below=\linespacing of #1-init.north, anchor=north] (#1-2) {\emph{#5}};
+        \end{scope}
+
+        \coordinate (mid) at ($ (#1-init.south)!0.5!(#1-2.north) $);
+        \coordinate (triple) at ($ (inner-#1.west |- 0, 0 |- mid)!0.75!(inner-#1.east |- 0, 0 |- mid) $);
+
+        \coordinate[below=0.5*\linespacing of #1-2.south] (x);
+        \node[anchor=east, text=black!70] at (triple |- 0, 0 |- x) (#1-tree-label) {\scriptsize TREE};
+        \coordinate (x) at ($ (#1-tree-label) + (0, -0.8*\linespacing) $);
+        \node[anchor=east, text=black!70] at (triple |- 0, 0 |- x) (#1-parent-label) {\scriptsize PARENTS};
+      \end{scope}
+
+      \draw[-, TabRed] (#1.west |- 0, 0 |- mid) -- (#1.east |- 0, 0 |- mid);
+      \coordinate (mid) at ($ (#1-2.south)!0.5!(#1-tree-label.north) $);
+      \draw[-, TabRed] (#1.west |- 0, 0 |- mid) -- (#1.east |- 0, 0 |- mid);
+      \coordinate (triple) at ($ (inner-#1.south west |- 0, 0 |- mid)!0.75!(inner-#1.south east |- 0, 0 |- mid) $);
+
+      \draw[-, TabRed] (triple) -- (triple |- 0, 0 |- #1.south);
+      \draw [draw=TabRed, rounded corners=.3em] (#1.north west) rectangle (#1.south east);
+
+      \begin{scope}[on background layer]
+        \draw [fill=TabRed!10, draw=TabRed, rounded corners=.3em] (#1.north west) rectangle (#1.south east);
+      \end{scope}
+
+      \node[anchor=south west, hash] (#1-hash) at ($ (#1.north west) $) {#7};
+
+      \coordinate (x) at ($ (triple)!0.5!(#1.east) $);
+      \node[hashcirc] (#1-tree) at (x |- 0,
+      0 |- #1-tree-label) {};
+
+      \node[hashcirc] (#1-parent) at (x |-
+      0, 0 |- #1-parent-label) {};
+    }
+
+    \def\treecolor{TabGreen}
+    \def\tree[#1]#2(#3)#4(#5)#6(#7) {
+      \begin{scope}[local bounding box=#1]
+        \begin{scope}[local bounding box=inner-#1]
+          \node (#1-init) at (#3) {\raisebox{2pt}{\textbf{tree object}}};
+        \end{scope}
+
+        \coordinate (mid) at ($ (#1-init) $);
+        \coordinate (triple) at ($ (inner-#1.west |- 0, 0 |- mid)!0.75!(inner-#1.east |- 0, 0 |- mid) $);
+
+        \coordinate (x) at ($ (#1-init) + (0, -\linespacing) $);
+        \node[anchor=east] at (triple |- 0, 0 |- x) (#1-tree-label) {\footnotesize \textsf{tmp}};
+        \coordinate (x) at ($ (#1-tree-label) + (0, -0.8*\linespacing) $);
+        \node[anchor=east] at (triple |- 0, 0 |- x) (#1-parent-label) {\footnotesize \textsf{shared}};
+      \end{scope}
+
+      \coordinate (mid) at ($ (#1-init)!0.5!(#1-tree-label) $);
+      \draw[-, \treecolor] (#1.west |- 0, 0 |- mid) -- (#1.east |- 0, 0 |- mid);
+      \coordinate (triple) at ($ (inner-#1.west |- 0, 0 |- mid)!0.75!(inner-#1.east |- 0, 0 |- mid) $);
+
+      \draw[-, \treecolor] (triple) -- (triple |- 0, 0 |- #1.south);
+      \draw [draw=\treecolor, rounded corners=.3em] (#1.north west) rectangle (#1.south east);
+
+      \begin{scope}[on background layer]
+        \draw [fill=\treecolor!10, draw=\treecolor, rounded corners=.3em] (#1.north west) rectangle (#1.south east);
+      \end{scope}
+
+      \node[anchor=south west, hash] (#1-hash) at ($ (#1.north west) $) {#5};
+
+      \coordinate (x) at ($ (triple)!0.5!(#1.east) $);
+      \node[hashcirc] (#1-tree) at (x |- 0,
+      0 |- #1-tree-label) {};
+
+      \node[hashcirc] (#1-parent) at (x |-
+      0, 0 |- #1-parent-label) {};
+    }
+
+    \def\treesmall[#1]#2(#3)#4(#5)#6(#7) {
+      \begin{scope}[local bounding box=#1]
+        \begin{scope}[local bounding box=inner-#1]
+          \node (#1-init) at (#3) {\raisebox{2pt}{\textbf{tree object}}};
+        \end{scope}
+
+        \coordinate (mid) at ($ (#1-init) $);
+        \coordinate (triple) at ($ (inner-#1.west |- 0, 0 |- mid)!0.75!(inner-#1.east |- 0, 0 |- mid) $);
+
+        \coordinate (x) at ($ (#1-init) + (0, -\linespacing) $);
+        \node[anchor=east] at (triple |- 0, 0 |- x) (#1-tree-label) {\footnotesize \textsf{#7}};
+      \end{scope}
+
+      \coordinate (mid) at ($ (#1-init)!0.5!(#1-tree-label) $);
+      \draw[-, \treecolor] (#1.west |- 0, 0 |- mid) -- (#1.east |- 0, 0 |- mid);
+      \coordinate (triple) at ($ (inner-#1.west |- 0, 0 |- mid)!0.75!(inner-#1.east |- 0, 0 |- mid) $);
+
+      \draw[-, \treecolor] (triple) -- (triple |- 0, 0 |- #1.south);
+      \draw [draw=\treecolor, rounded corners=.3em] (#1.north west) rectangle (#1.south east);
+
+      \begin{scope}[on background layer]
+        \draw [fill=\treecolor!10, draw=\treecolor, rounded corners=.3em] (#1.north west) rectangle (#1.south east);
+      \end{scope}
+
+      \node[anchor=south west, hash] (#1-hash) at ($ (#1.north west) $) {#5};
+
+      \coordinate (x) at ($ (triple)!0.5!(#1.east) $);
+      \node[hashcirc] (#1-tree) at (x |- 0,
+      0 |- #1-tree-label) {};
+    }
+
+    \def\blobcolor{TabBlue}
+    \def\blob[#1]#2(#3)#4(#5)#6(#7) {
+      \begin{scope}[local bounding box=#1]
+        \begin{scope}[local bounding box=inner-#1]
+          \node (#1-init) at (#3) {\ \ \,\textbf{blob}};
+        \end{scope}
+
+        \coordinate (triple) at ($ (inner-#1.west |- 0, 0 |- #1-init) $);
+        \coordinate (x) at ($ (#1-init) + (0, -0.7*\linespacing) $);
+        \node[anchor=north west, text width = 1.2cm] at (triple |- 0, 0 |- x) (#1-tree-label) {\scriptsize\texttt{#7}};
+        \coordinate (x) at ($ (#1-tree-label) + (0, -0.8*\linespacing) $);
+      \end{scope}
+
+      \coordinate (mid) at ($ (#1-init.south)!0.5!(#1-tree-label.north) $);
+      \draw[-, \blobcolor] (#1.west |- 0, 0 |- mid) -- (#1.east |- 0, 0 |- mid);
+      \coordinate (triple) at ($ (inner-#1.west |- 0, 0 |- mid)!0.75!(inner-#1.east |- 0, 0 |- mid) $);
+      \draw [draw=\blobcolor, rounded corners=.3em] (#1.north west) rectangle (#1.south east);
+
+      \begin{scope}[on background layer]
+        \draw [fill=\blobcolor!10, draw=\blobcolor, line width=0.75pt, rounded corners=.3em] (#1.north west) rectangle (#1.south east);
+      \end{scope}
+
+      \node[anchor=south west, hash] (#1-hash) at ($ (#1.north west) $) {#5};
+    }
+
+    \begin{scope}[local bounding box = heap]
+      \begin{scope}[local bounding box = commits]
+
+        \commit[c1] (0, 0) (Revert change) (9eef1b3)
+
+        \coordinate[below = 1.5cm of c1] (commit-2);
+        \commit[c2] (commit-2) (Add new file) (557c9cf)
+
+        \coordinate[below = 1.5cm of c2] (commit-3);
+        \commit[c3] (commit-3) (Initial commit) (707d4c8)
+
+        \draw[gray, dashed, ->] ($ (c3.west) + (-0.8, 0) $) -- node[midway, fill=white] {\emph{Time}} ($ (c1.west) + (-0.8, 0) $);
+      \end{scope}
+
+      \coordinate[right=4.25cm of c1] (tree-1);
+      \tree[t1] (tree-1) (ea40792) (
+      )
+
+      \coordinate[below left=3.1cm and 1.5cm of tree-1] (tree-2);
+      \treesmall[t2] (tree-2) (c4cf797) (old.txt)
+
+      \coordinate[below right=3.1cm and 1.5cm of tree-1] (tree-3);
+      \treesmall[t3] (tree-3) (6ed24e6) (new.txt)
+
+      \coordinate[below=2.6cm of tree-2, xshift=-1.5mm] (blob-1);
+      \blob[b1] (blob-1) (b5d7a15) (01000101 01111000)
+
+      \coordinate[below=2.6cm of tree-3, xshift=-1.5mm] (blob-2);
+      \blob[b2] (blob-2) (2818d78) (01101001 01100101)
+
+      \draw[->, gitptr, draw=TabRed!60] (c1-parent) .. controls ++(0, -1) and ++(0, 1) .. (c2-hash);
+      \draw[->, gitptr, draw=TabRed!60] (c2-parent) .. controls ++(0, -1) and ++(0, 1) .. (c3-hash);
+      \draw[->, gitptr, draw=TabGreen!60] (c1-tree) .. controls ++(1, 0) and ++(-2, 0) .. (t2-hash);
+      \draw[->, gitptr, draw=TabGreen!60] (c2-tree) .. controls ++(1.5, 0) and ++(-4, 0) .. (t1-hash);
+      \draw[->, gitptr, draw=TabGreen!60] (c3-tree) .. controls ++(1.5, 0) and ++(-2, 0) .. (t2-hash);
+
+      \draw[->, gitptr, draw=TabGreen!60] (t1-tree) .. controls ++(1, 0) and ++(0, 1) .. (t3-hash);
+      \draw[->, gitptr, draw=TabGreen!60] (t1-parent) .. controls ++(0, -1) and ++(0, 1) .. (t2-hash);
+
+      \draw[->, gitptr, draw=TabBlue!60] (t2-tree) .. controls ++(0, -1) and ++(0, 1) .. (b1-hash);
+      \draw[->, gitptr, draw=TabBlue!60] (t3-tree) .. controls ++(0, -1) and ++(0, 1) .. (b2-hash);
+
+      \draw [-] ($ (c3-parent.south west) + (-0.05, -0.05) $) -- ($ (c3-parent.north east) + (0.05, 0.05) $);
+    \end{scope}
+
+    \begin{scope}[local bounding box=refs]
+
+      \coordinate (t) at (commits.west |- 0, 0 |- c1);
+
+      \node[hashcirc, left = 10mm of t] (r-master-hash) {};
+      \node[left = 5pt of r-master-hash, minimum height=1.7em, font=\footnotesize\ttfamily] (r-master) {master};
+
+      \node[hashcirc, below = 0.8cm of r-master-hash] (r-client-hash) {};
+      \node[left = 5pt of r-client-hash, minimum height=1.7em, font=\footnotesize\ttfamily] (r-client) {alpha};
+    \end{scope}
+
+    \coordinate (ref-mid) at ($ (refs.west)!0.5!(refs.east) $);
+    \node[anchor=south,yshift=0.1cm,gray] (branch-label) at (ref-mid |- 0, 0 |- r-master.north) {\emph{branches}};
+
+    \draw[->, gitptr, draw=TabRed!60] (r-master-hash) .. controls ++(1, 0) and ++(-1.9, 0) .. (c1-hash);
+    \draw[->, gitptr, draw=TabRed!60] (r-client-hash) .. controls ++(1, 0) and ++(-1.9, 0) .. (c2-hash);
+
+    % Compute outer bounding boxes
+    \coordinate (heap-nw) at ($ (heap.north west) + (-\boxspace, \boxspace) $);
+    \coordinate (heap-ne) at ($ (heap.north east) + (\boxspace + 1, \boxspace) $);
+    \coordinate (heap-sw) at ($ (heap.south west) + (-\boxspace, -\boxspace) $);
+    \coordinate (heap-se) at ($ (heap.south east) + (\boxspace + 1, -\boxspace) $);
+
+    \coordinate (divline) at ($(c1.east)!0.5!(t2.west)$);
+    \coordinate (labelheight) at ($(heap-se) + (0, -0.5)$);
+    \coordinate (causal-label-x) at ($(heap-sw)!0.5!(divline)$);
+    \coordinate (merkle-label-x) at ($(heap-se)!0.5!(divline)$);
+
+    \def\refsinnerpad{0.2}
+
+    \coordinate (east-bound) at ($ (refs.east) + (\refsinnerpad, 0) $);
+    \coordinate (west-bound) at ($ (refs.west) + (-\refsinnerpad, 0) $);
+
+    \coordinate (refs-nw) at (west-bound |- 0, 0 |- heap-nw);
+    \coordinate (refs-ne) at  (east-bound |- 0, 0 |- heap-nw);
+    \coordinate (refs-sw) at (west-bound |- 0, 0 |- heap-sw);
+    \coordinate (refs-se) at (east-bound |- 0, 0 |- heap-sw);
+
+    \foreach \x in {r-master,r-client} {
+        \draw[-, TabPurple] (refs-sw |- 0, 0 |- \x.north) -- (refs-se |- 0, 0 |- \x.north);
+        \draw[-, TabPurple] (refs-sw |- 0, 0 |- \x.south) -- (refs-se |- 0, 0 |- \x.south);
+        \begin{scope}[on background layer]
+          \draw[draw=none, fill=TabPurple!20] (refs-sw |- 0, 0 |- \x.north) rectangle (refs-se |- 0, 0 |-
+          \x.south);
+        \end{scope}
+      }
+
+    \draw[draw, thick] (heap-nw) rectangle (heap-se);
+    \draw[draw, thick] (refs-nw) rectangle (refs-se);
+
+    \node[rectangle, fill=white] at ($(heap-nw)!0.5!(heap-ne)$) (heap-label) {\textbf{Content-addressable heap}};
+
+    \node[anchor=north, yshift=5pt, fill=white, text width=1.7cm, outer sep=0, inner sep=0, align=center] at
+    ($(refs-nw)!0.5!(refs-ne)$) (refs-label) {\textbf{Reference\\ store}};
+
+  \end{tikzpicture}
+\end{figure}

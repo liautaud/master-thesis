@@ -1,0 +1,42 @@
+\begin{figure}[!ht]
+  \caption{Simple reference counting algorithm.}
+  \label{alg:ref-count}
+
+  \centering
+  \begin{lstlisting}
+counts = {}
+
+# Increments the reference count of an object.
+increment(o):
+    if o $\neq$ null:
+        counts[o] $\leftarrow$ counts[o] + 1
+
+# Decrement the reference count of an object, reclaiming the
+# object if the count reaches zero–which might recursively
+# trigger the reclaiming of successors of the object.
+decrement(h):
+    if h $\neq$ null:
+        counts[h] $\leftarrow$ counts[h] - 1
+        if counts[h] = 0:
+            for h' $\in$ successors(h):
+                decrement(h')
+            free(h)
+
+atomic Store(o):
+    h $\leftarrow$ backend.heap.Set(o)
+    counts[h] $\leftarrow$ 0
+
+    # Update the counts of the successors.
+    for h' $\in$ successors(o):
+        increment(h')
+
+    return h
+
+atomic Update(ref, new_h):
+    old_h $\leftarrow$ backend.refs.Find(ref)
+    decrement(old_h)
+
+    backend.refs.Set(ref, new_h)
+    increment(new_h)
+\end{lstlisting}
+\end{figure}

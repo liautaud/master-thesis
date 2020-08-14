@@ -1,0 +1,56 @@
+%%   =========================
+%%   |     Master Thesis     |
+%%   =========================
+%%
+%%    Author: Romain Liautaud <romain@liautaud.fr>
+%%     Tutor: Clément Pascutto <clement@tarides.org>
+%%   Subject: Garbage collection of a decentralized data store.
+%%   Company: Tarides <contact@tarides.org>
+
+\documentclass[11pt]{article}
+
+% Configuration files (packages and definitions).
+\input{config/prelude.tex}
+\input{config/tikz.tex}
+
+% Document metadata.
+\title{Garbage collection of a decentralized data store}
+\credits{February-August 2020 -- Tarides \\
+    \textit{Company supervisor}: Clément Pascutto \\
+    \textit{EPFL supervisor}: Anne-Marie Kermarrec }
+\author{Romain Liautaud}
+\abstract{
+    This thesis summarizes my internship work designing and
+    implementing a garbage collection scheme for Irmin~\cite{irmin},
+    a decentralized database library written in OCaml. It explores
+    both the theoretical aspects of garbage collection and the practical
+    challenges that come with implementation--mainly regarding pause time and
+memory efficiency.}
+
+\begin{document}
+
+\input{frontpage.tex}
+
+\input{chapters/1-introduction.tex}
+\newpage
+
+\input{chapters/2-garbage-collection-strategies.tex}
+\newpage
+
+\input{chapters/3-concurrent-garbage-collection.tex}
+\newpage
+
+\input{chapters/4-memory-constrained-marking.tex}
+\newpage
+
+\input{chapters/5-backend-filtering-strategies.tex}
+
+\input{chapters/6-conclusion.tex}
+\newpage
+
+\input{chapters/7-references.tex}
+\newpage
+
+\input{chapters/8-appendices.tex}
+
+\end{document}

@@ -1,0 +1,56 @@
+\begin{figure}[!ht]
+  \caption{Concurrent collection for the Irmin heap.}
+  \label{alg:concurrent-collection}
+
+  \centering
+  \begin{lstlisting}
+shared collecting $\leftarrow$ false    # Whether a collection cycle is already active.
+shared pending $\leftarrow$ $\emptyset$            # Stack of all the grey objects.
+shared marked $\leftarrow$ $\emptyset$             # Set of all the black objects.
+
+# Start a garbage collection cycle.
+Collect():
+    if collecting:
+        raise "Collector is already running."
+    prepare()
+    mark()
+    backend.heap.Filter(λh. h $\in$ marked)
+    collecting $\leftarrow$ false
+
+atomic prepare():
+    collecting $\leftarrow$ true
+
+    # Reset the object colors.
+    pending $\leftarrow$ Roots()
+    marked $\leftarrow$ $\emptyset$
+
+mark():
+    while pending $\neq$ $\emptyset$:
+        visit()
+
+# Atomically pick a grey object and visit it.
+atomic visit():
+    o $\leftarrow$ pop(pending)
+    if hash(o) $\not\in$ marked:
+        marked $\leftarrow$ marked $\cup$ {hash(o)}
+        pending $\leftarrow$ pending $\cup$ successors(o)
+
+# Store an object on the heap while maintaining the invariant.
+atomic Store(o):
+    h $\leftarrow$ backend.heap.Set(o)
+
+    # New objects are automatically colored black.
+    if collecting:
+        marked $\leftarrow$ marked $\cup$ {h}
+
+    return h
+
+# Update a branch while maintaining the invariant.
+atomic Update(ref, h):
+    backend.refs.Set(ref, h)
+
+    # Targets of branches are automatically colored grey if needed.
+    if hash(o) $\not\in$ marked:
+        pending $\leftarrow$ pending $\cup$ {hash(o)}
+\end{lstlisting}
+\end{figure}

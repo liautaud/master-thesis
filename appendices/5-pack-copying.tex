@@ -1,0 +1,113 @@
+\section{Simplified implementation of a semispace copying pack-file backend.}
+\label{app:pack-copying}
+
+\setminted{fontsize=\footnotesize,baselinestretch=1}
+\begin{minted}{ocaml}
+module Content_Addressable (V : S.HASHABLE) = struct
+  module Index = Index.Make
+     (struct type t = V.Digest.t end)  (* Use hash digests as keys. *)
+     (struct type t = int64 * int end) (* Use (offset, size) pairs as values. *)
+
+  type t = {
+    (* Two atomically switcheable packs for copying garbage collection. *)
+    mutable current : [ `A | `B ];
+    index_a : Index.t;
+    index_b : Index.t;
+    pack_a : Pack.t;
+    pack_b : Pack.t;
+    filter_lock : Lwt_mutex.t;
+  }
+
+  type key = V.Digest.t
+
+  type value = V.t
+
+  (** Updates the value of t.current. *)
+  let set_current t c =
+    (* In a real implementation, the value of current should also be persisted
+       to disk so that it can be retrieved when the backend is first opened. *)
+    t.current <- c
+
+  (** Returns the [Pack.t] corresponding with [t.current]. *)
+  let get_current_pack t =
+    match t.current with `A -> t.pack_a | `B -> t.pack_b
+
+  (** Returns the [Pack.t] corresponding with the opposite of [t.current]. *)
+  let get_other_pack t = match t.current with `A -> t.pack_b | `B -> t.pack_a
+
+  (** Returns the [Index.t] corresponding with [t.current]. *)
+  let get_current_index t =
+    match t.current with `A -> t.index_a | `B -> t.index_b
+
+  (** Returns the [Index.t] corresponding with the opposite of [t.current]. *)
+  let get_other_index t =
+    match t.current with `A -> t.index_b | `B -> t.index_a
+
+  let mem t k =
+    (* An entry is present iff. it is present in the index. *)
+    let index = get_current_index t in
+    Lwt.return (Index.mem index k)
+
+  let find t k =
+    (* Find the offset from the current index, then read from the current pack. *)
+    let index = get_current_index t in
+    let pack = get_current_pack t in
+    let found =
+      match Index.find index k with
+      | offset, size ->
+          let buffer = Bytes.create size in
+          let read = Pack.read pack ~off:offset buffer in
+          if read < size then
+            None
+          else
+            Bytes.unsafe_to_string buffer
+            |> V.unserialize
+            |> Result.to_option
+      | exception Not_found -> None
+    in
+    Lwt.return found
+
+  let set t v =
+    (* Deterministically derive the address of the value. *)
+    let h = V.hash v in
+
+    (* Append the bytes to the current pack, the update the current index. *)
+    let index = get_current_index t in
+    let pack = get_current_pack t in
+    let offset = Pack.offset pack in
+    let serialized = V.serialize v in
+    let size = String.length serialized in
+    Pack.append pack serialized;
+    Index.replace index h (offset, size);
+    Lwt.return h
+
+  let filter t p =
+    (* Iterate over all the entries in the current index, and copy all the entries
+       that need to be kept to the other index and other pack. Once they are all
+       copied, atomically switch [t.current], and finally erase the contents of
+       the previous index and pack. *)
+    Lwt_mutex.with_lock t.filter_lock (fun () ->
+        (* This mutex prevents calls to filter from running concurrently. *)
+        let current_index = get_current_index t in
+        let other_index = get_other_index t in
+        let current_pack = get_current_pack t in
+        let other_pack = get_other_pack t in
+        let iter k (old_offset, size) =
+          (* Only copy entries which satisfy the predicate [p]. *)
+          if p k then (
+            let buffer = Bytes.create size in
+            let read = Pack.read current_pack ~off:old_offset buffer in
+            if read < size then invalid_arg "No bytes read."
+            else
+              let new_offset = Pack.offset other_pack in
+              Pack.append other_pack (Bytes.unsafe_to_string buffer);
+              Index.replace other_index k (new_offset, size) )
+        in
+        Index.iter iter current_index;
+        set_current t (match t.current with `A -> `B | `B -> `A);
+        Lwt_unix.yield () >>= fun () ->
+        Index.clear current_index;
+        Pack.clear current_pack;
+        Lwt.return_unit)
+end
+\end{minted}

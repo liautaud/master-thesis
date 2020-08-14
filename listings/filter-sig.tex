@@ -1,0 +1,13 @@
+\begin{figure}[ht]
+  \caption{Signature of the \texttt{filter} function of Irmin content-addressable backend stores.}
+  \label{lst:filter-sig}
+
+  \centering
+  \vspace{-1em}
+  \begin{minted}{ocaml}
+val filter : t -> (key -> bool) -> unit Lwt.t
+(** [filter t p] informs the content-addressable store that it can remove all
+  values whose key [k] was added to the store before the call to [filter]
+  and does not satisfy the predicate [p]. *)
+    \end{minted}
+\end{figure}

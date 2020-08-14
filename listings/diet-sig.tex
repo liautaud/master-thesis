@@ -1,0 +1,35 @@
+\begin{figure}[ht]
+  \caption{Abridged signature of a DIET interval set.}
+  \label{lst:diet-sig}
+
+  \centering
+  \vspace{-1em}
+  \begin{minted}{ocaml}
+module type INTERVAL_SET = sig
+  type elt
+  (** The type of the set elements *)
+
+  type interval
+  (** An interval: a range (x, y) of set values where all the elements from
+      x to y inclusive are in the set *)
+
+  type t
+  (** The type of sets *)
+
+  val empty: t
+  (** The empty set *)
+
+  val cardinal: t -> elt
+  (** [cardinal t] is the number of elements in the set [t] *)
+
+  val add: interval -> t -> t
+  (** [add interval t] returns the set consisting of [t] plus [interval] *)
+
+  val remove: interval -> t -> t
+  (** [remove interval t] returns the set consisting of [t] minus [interval] *)
+
+  val choose: t -> interval
+  (** [choose t] returns one interval, or raises Not_found if the set is empty *)
+end
+    \end{minted}
+\end{figure}

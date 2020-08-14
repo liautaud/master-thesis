@@ -1,0 +1,36 @@
+\begin{figure}[!ht]
+  \caption{Cached partial collection using hash prefixes.}
+  \label{alg:partial-prefix-lru}
+
+  \centering
+  \begin{lstlisting}
+# Run $2^\beta$ partial collection cycles.
+atomic Collect($beta$):
+    for prefix in $\{0, 1\}^\beta$:
+        marked <- mark(prefix)
+        backend.heap.Filter($\lambda$h. not startsWith(h, prefix) or h $\in$ marked)
+
+# Mark only the objects whose hashes match the given prefix.
+mark(prefix):
+    # Stack of all the grey objects.
+    pending <- Roots()
+
+    # Set of all the black objects.
+    marked <- $\emptyset$
+
+    # Fixed-size LRU cache of already visited objects.
+    visited <- $\emptyset$
+
+    while pending $\neq$ $\emptyset$:
+        o <- pop(pending)
+        if startsWith(hash(o), prefix) and hash(o) $\not\in$ marked:
+            marked <- marked $\cup$ {hash(o)}
+            visited <- visited $\cup$ {hash(o)}
+            pending <- pending $\cup$ successors(o)
+        elif not startsWith(hash(o), prefix) and hash(o) $\not\in$ visited:
+            visited <- visited $\cup$ {hash(o)}
+            pending <- pending $\cup$ successors(o)
+
+    return marked
+\end{lstlisting}
+\end{figure}

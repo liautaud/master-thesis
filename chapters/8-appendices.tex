@@ -1,0 +1,36 @@
+\section*{Appendices}
+\addcontentsline{toc}{section}{Appendices}
+
+\vspace{-1.5em}
+\titleformat{name=\section}[block]{}{}{0pt}{\colorsection}
+\titlespacing*{\section}{0pt}{\baselineskip}{\baselineskip}
+
+\begin{appendices}
+  \appendix
+
+  % Prevent the appendices from showing up in the TOC.
+  \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
+
+  \input{appendices/1-irmin-interface}
+  \newpage
+
+  \input{appendices/2-modular-tracing}
+  \newpage
+
+  \input{appendices/3-concurrent-modular-tracing}
+  \newpage
+
+  \input{appendices/4-pack-backend}
+  \newpage
+
+  \input{appendices/5-pack-copying}
+  \newpage
+
+  \input{appendices/6-pack-lazy}
+  \newpage
+
+  \input{appendices/7-disk-access}
+  \newpage
+
+  \input{appendices/8-diet-bench}
+\end{appendices}

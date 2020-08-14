@@ -1,0 +1,40 @@
+\begin{figure}[ht]
+  \caption{A few basic operations on an Irmin database.}
+  \label{lst:irmin-example}
+
+  \centering
+  \vspace{-1em}
+  \begin{minted}{ocaml}
+open Irmin
+
+(* The return values of most operations are wrapped inside the [Lwt.t]
+   concurrency monad, so we unwrap them using the OCaml monadic syntax. *)
+let (let*) = Lwt.bind
+
+(* Create a new Irmin database with SHA256 hashes, in-memory storage,
+   string branches, string paths and floating-point blobs. *)
+module Database = Make (Hash.SHA256) (Backend.Memory)
+                       (Types.String) (Types.String) (Types.Float)
+
+(* Create the database by forwarding options to the backend. *)
+let* t = Database.create () in
+
+(* Checkout the master branch. *)
+let* master = Database.checkout t "master" in
+
+(* Commit a first value under path /foo. *)
+let* c1 = Database.set ~message:"First commit." master ["foo"] 0.0 in
+
+(* Create a new `checkpoint` branch pointing to the first commit. *)
+let* () = Database.Branches.set t "checkpoint" c1 in
+
+(* Commit multiple values at once under paths /bar/baz and /bar/boz. *)
+let* c2 = Database.set_tree ~message:"Second commit." master ["bar"]
+            (`Node [("baz", `Blob 1.0); ("boz", `Blob 2.0)]) in
+
+(* Retrieve the value of at /bar/baz from the `master` branch.
+   Note that this value wouldn't exist in the `checkpoint` branch. *)
+let* v = Database.get master ["bar"; "baz"] in
+assert (v = 0.0)
+    \end{minted}
+\end{figure}

@@ -1,0 +1,53 @@
+\section{Simplified implementation of a pack-file based \texttt{CONTENT\_ADDRESSABLE\_STORE}.}
+\label{app:pack-backend}
+
+\setminted{fontsize=\footnotesize,baselinestretch=1}
+\begin{minted}{ocaml}
+module Content_Addressable (V : S.HASHABLE) = struct
+  module Index = Index.Make
+     (struct type t = V.Digest.t end)  (* Use hash digests as keys. *)
+     (struct type t = int64 * int end) (* Use (offset, size) pairs as values. *)
+
+  type t = {
+    index : Index.t;
+    pack : Pack.t;
+  }
+
+  type key = V.Digest.t
+
+  type value = V.t
+
+  let mem t k =
+    (* An entry is present iff. it is present in the index. *)
+    Lwt.return (Index.mem t.index k)
+
+  let find t k =
+    (* Find the offset from the index, then read the pack at that offset. *)
+    let found =
+      match Index.find t.index k with
+      | offset, size ->
+          let buffer = Bytes.create size in
+          let read = Pack.read t.pack ~off:offset buffer in
+          if read < size then
+            None
+          else
+            Bytes.unsafe_to_string buffer
+            |> V.unserialize
+            |> Result.to_option
+      | exception Not_found -> None
+    in
+    Lwt.return found
+
+  let set t v =
+    (* Deterministically derive the address of the value. *)
+    let h = V.hash v in
+
+    (* Append the bytes to the pack, the update the index. *)
+    let offset = Pack.offset t.pack in
+    let serialized = V.serialize v in
+    let size = String.length serialized in
+    Pack.append t.pack serialized;
+    Index.replace t.index h (offset, size);
+    Lwt.return h
+end
+\end{minted}

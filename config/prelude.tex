@@ -1,0 +1,125 @@
+%% Global configuration for the document.
+
+% Document geometry.
+\usepackage[a4paper, margin=0.7in, bottom=.8in]{geometry}
+
+\usepackage{graphicx}
+\usepackage{svg}
+\usepackage{minted}
+\usepackage{stmaryrd}
+\usepackage[english]{babel}
+\usepackage{lmodern}
+\usepackage{mathpazo}
+\usepackage[T1]{fontenc}
+\usepackage{fontspec}
+\usepackage{forest}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{fancyvrb}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage[colorlinks, allcolors=gray]{hyperref}
+\usepackage[noabbrev, capitalize, nameinlink]{cleveref}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{titlesec}
+\usepackage[pdf]{graphviz}
+\usepackage{titling}
+\usepackage{enumitem}
+\usepackage{tabu}
+\usepackage{appendix}
+\usetikzlibrary{shapes,arrows}
+
+% Pseudocode listigs.
+\usepackage{listings}
+\lstset{basicstyle=\footnotesize\ttfamily,breaklines=true,mathescape}
+
+% Typography
+\usepackage[scaled=1,osf,tighter]{newpxtext}
+\setsansfont{Latin Modern Sans}
+\renewcommand*{\ttdefault}{npxtt}
+
+% Minted styling
+\usemintedstyle{tango}
+\setminted{linenos}
+\setminted{fontsize=\small}
+\setminted{xleftmargin=2em}
+
+% Custom figure captions
+\DeclareCaptionFormat{customcap}{   \vspace{0.5em}   \linebreak   \setlength{\fboxsep}{4pt}   \colorbox{black!4}{%%%%%
+    \hspace{-0.1em}%
+    \parbox{0.98\linewidth}{\centering \textit{#1}#2#3}}   \vspace{0.5em}}%
+\captionsetup[figure]{format=customcap}
+
+% Figure margins
+\setlength{\textfloatsep}{1.5em}
+\setlength{\intextsep}{2em}
+
+% Custom appendix captions
+\newcommand{\colorsection}[1]{%
+  \vspace{0.5em}%
+  \linebreak%
+  \setlength{\fboxsep}{6pt}%
+  \colorbox{black!4}{%
+    \parbox{\linewidth}{\centering \textit{Appendix~\thesection}:\ #1}}%
+  \vspace{0.5em}}
+
+% Highlight boxes
+\def\highlightbox#1{%
+  \setlength{\fboxsep}{2pt}
+  \colorbox{yellow!60}{\textbf{#1}}}
+
+% Appendix reference boxes
+\def\appendixref#1{%
+  \noindent%
+  \setlength{\fboxsep}{6pt}%
+  \colorbox{yellow!20}{%
+    $\hspace{0.3em} \triangleright$%
+    \hspace{0.2em}%
+    \parbox{\linewidth-2.8em}{\textit{#1}}}}
+
+% Title margins
+\titlespacing*{\subsection}{0pt}{2\baselineskip}{\baselineskip}
+
+% Line spread
+\linespread{1.05}
+
+% Algorithms formatting
+\algrenewcommand\alglinenumber[1]{\footnotesize #1}
+\algrenewcomment[1]{\(\triangleright\) #1}
+
+% Circled numbers
+\newcommand*\circled[1]{\tikz[baseline=(char.base)]{
+    \node[shape=circle,draw,inner sep=2pt] (char) {#1};}}
+
+% Subtitle definition
+\newcommand*\subtitle[1]{\newcommand{\thesubtitle}{#1}}
+
+% Credits definition
+\newcommand*\credits[1]{\newcommand{\thecredits}{#1}}
+
+% Abstract redefinition
+\renewcommand\abstract[1]{\newcommand{\theabstract}{#1}}
+
+% Theorems and definitions
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+
+% Asterisms
+\newcommand{\asterism}{%
+  \smash{%
+    \raisebox{-.5ex}{%
+      \setlength{\tabcolsep}{-.5pt}%
+      \begin{tabular}
+        {@{}cc@{}}%
+        \multicolumn2c* \\[-2ex]* & * %
+      \end{tabular}
+    }}}
+
+% Table of contents
+\newcommand{\nocontentsline}[3]{}
+\newcommand{\tocless}[2]{%
+  \bgroup\let\addcontentsline=\nocontentsline#1{#2}\egroup}

@@ -1,0 +1,100 @@
+\section{Introduction and motivation}
+
+During my internship at Tarides, I was tasked with the design and implementation of a garbage collection scheme for Irmin, a decentralized database library written in OCaml. Since the design of Irmin is heavily inspired by the internals of the Git version control system, a short introduction to these internals is necessary to understand the context surrounding my work.
+
+\subsection{The Git version control system}
+
+\emph{Git}~\cite{git} is a free and open source \emph{distributed version control system}. It was initially designed by Linus Torvalds to facilitate the development of the Linux kernel~\cite{git-history}, and is now widely used by developers in the open source community. It popularized the ideas of \emph{branching} and \emph{remotes}--which allow developers to work in parallel on multiple local copies of the source code, without needing network access or a centralized server--and of \emph{merging}--to later reconcile their changes with the changes of other developers.
+
+In essence, a Git repository is a miniature filesystem which tracks changes to files--usually but not necessarily source code--by taking snapshots called \emph{commits}~\cite{git-what-is}. Each commit stores the content of every file in the repository at a given moment in time, as well as associated metadata such as the parent of the commit and a short message describing the changes, eventually building up a history of the files over time. To avoid accidental loss of data, commits can't be deleted or edited; instead, reverting the changes from a commit is done by creating a new commit which overrides the changes.
+
+\bigskip
+The internals of Git are described extensively in \emph{Git from the Bottom Up}~\cite{git-bottom-up}; what follows is a simplified summary. Git repositories consist of a \emph{reference store}, which stores pointers--called \emph{branches}--to commits; and a \emph{content-addressable heap} which stores commits, tree nodes and blobs. The reference store is mutable, meaning that branches can point to different commits over time. Every object in the content-addressable heap is immutable, and is addressed by a \emph{hash} which is derived deterministically from the content of the object--so that identical objects always have the same address. This design has several desirable properties: it guarantees the integrity of the files in the repository; enforces immutability at the storage level; and most importantly provides a space-efficient representation, as equal sub-trees have the same hash so they are only stored once--this technique is usually known as hash consing~\cite{filli06}.
+
+\input{figures/object-graph}
+
+\bigskip
+\cref{fig:object-graph} illustrates the state of the reference store and the content-addressable heap of a Git repository after performing the following operations in order: initializing an empty repository; adding a file called \texttt{old.txt} at the root of the repository; creating a commit with the message ``Initial commit''; moving \texttt{old.txt} to a new subfolder called \texttt{shared} and adding a file called \texttt{new.txt} to a new subfolder called \texttt{tmp}; creating a commit with the message ``Add new file''; creating to a new branch called \texttt{alpha}; and finally creating a rollback commit with the message ``Revert change''.
+
+\bigskip
+It becomes clear after looking at \cref{fig:object-graph} that the commits, tree nodes and blobs stored in the content-addressable heap form a directed graph \(G = (V, E)\) called the object graph. \(V\) is the set of \emph{graph objects}, defined precisely as:
+\begin{align*}
+  V & \subset (\{\texttt{`Commit}\} \times H \times \mathcal{P}(H)) \\
+    & \ \cup  (\{\texttt{`Node}\} \times \mathcal{P}(S \times H))   \\
+    & \ \cup  (\{\texttt{`Blob}\} \times B)
+\end{align*}
+
+With \(H = \{0, 1\}^{256}\) the space of 256-bit hash digests, \(S\) the set of valid steps for node paths and \(B\) the set of valid blobs. For every object \(o \in V\), we define \(\texttt{hash}(o) \in H\) as the deterministically-computed address of \(o\). For the sake of clarity, we also define helper functions to be used in pseudo-code algorithms. for a commit \(c = (\texttt{`Commit}, t, ps) \in V\), let \(\texttt{tree}(c) := t\) be the address of the root node for \(c\), and let \(\texttt{parents}(c) := ps\) be the set of addresses of the parent commits of \(c\). For a node \(n = (\texttt{`Node}, ch) \in V\), let \(\texttt{children}(n) := ch\) be the set of \((step, hash) \in P \times S\) pairs for every child node of \(n\). For a blob \(b = (\texttt{`Blob}, c) \in V\), let \(\texttt{content}(b) := c\) be the content of \(b\).
+
+Finally, for any object \(o \in V\) in the graph, we define the successors of \(o\) as:
+
+\begin{equation*}
+  successors(o) =
+  \begin{cases}
+    \{\texttt{tree}(o)\} \cup \texttt{parents}(o)         & \text{if $o$ is a commit}
+    \\
+    \{hash \ | \ (step, hash) \in \texttt{children}(o) \} & \text{if $o$ is a node}
+    \\
+    \emptyset                                             & \text{if $o$ is a blob}
+  \end{cases}
+\end{equation*}
+
+\bigskip
+Since the address of every object in the graph derived from the address of its parents, it should be clear that the object graph is acyclic--assuming that the hash function is reasonably collision-resistant. Formally speaking, this data structure is called a \emph{Merkle DAG}--a generalization of \emph{Merkle trees} which were first introduced in~\cite{merkle88} to compute cryptographic signatures.
+
+\subsection{The Irmin database library}
+
+\emph{Irmin}~\cite{irmin} is an open-source distributed
+database library written in OCaml, which is maintained by Tarides~\cite{tarides} as part of the MirageOS~\cite{mirage}~\cite{mirage-paper} project. It allows developers to build branchable, mergeable distributed data stores; and supports--among other things--snapshotting, custom storage layers and custom datatypes. Introductory research material for Irmin can be found at \cite{irmin15} and \cite{irmin19}.
+
+Irmin was initially built as an extension of Xenstore~\cite{xenstore}, and has since been used as a backend for many OCaml applications, both within the MirageOS ecosystem--for instance in \texttt{mirage/arp}~\cite{mirage-arp}, \texttt{mirage/ocaml-dns}~\cite{mirage-dns} or \texttt{roburio/caldav}~\cite{roburio-caldav}--and outside of it, for instance in \emph{continuous integration} systems which build thousands of artefacts daily; or in the \emph{Docker for Desktop} client.
+
+Notably, Irmin serves as the storage backend for nodes of the Tezos~\cite{tezos} blockchain, which was first described in~\cite{tezos14}. At the time of writing, this requires supporting the storage of roughly 350 million objects--for a total disk footprint of 37 GB. \emph{Up-to-date figures can be computed using the script at~\cite{tree-statistics}.}
+
+Practically, an Irmin database is created by supplying several modules to the \texttt{Irmin.Make} functor: the function used to hash objects; the storage backend; and the datatype of branch handles, node labels and blobs. Using the database is then akin to manipulating a Git repository: as illustrated in \cref{lst:irmin-example}, the user can initialize the database; checkout a branch; store one or many versioned values in the branch by creating a commit; etc. Since most operations result in the creation of a new commit, changes in an Irmin database are always non-destructive and can be rolled back safely if necessary. Similarly to Git, Irmin also provides an API to synchronize with remote databases using \texttt{push} and \texttt{pull} operations--although the specifics are out of the scope of this internship. \cref{app:irmin-interface} contains the full database interface for reference.
+
+\input{listings/irmin-example}
+
+Note that, unless otherwise mentioned, all the code listings in this thesis are excerpts from the \texttt{irmin-toy}~\cite{irmin-toy-github} library instead of \texttt{irmin}~\cite{irmin-github}. It is a simplified model which I implemented from scratch during this internship, and which focuses only on the parts of Irmin that are relevant to my work.
+
+\bigskip
+One of the key aspects of Irmin is \emph{modularity}: as highlighted at the beginning of \cref{lst:irmin-example}, the hash function, storage backend and object datatypes can be swapped for any other module--either provided by Irmin or user-defined--with the right signature. Irmin comes with a few storage backends out of the box: \texttt{irmin-mem}, which stores objects in a hashtable in memory; \texttt{irmin-fs}, which persists serialized objects on a POSIX filesystem; \texttt{irmin-git}, which provides a layer of compatibility with Git repositories; and \texttt{irmin-pack}, which persists serialized objects in a single large file similar to a block device. Storage backends must satisfy the interface from lines 398 to 581 of \cref{app:irmin-interface}: in short, they must provide both an \texttt{ATOMIC\_WRITE\_STORE} and a \texttt{CONTENT\_ADDRESSABLE\_STORE} implementation; the \texttt{ATOMIC\_WRITE\_STORE} is a mutable store which will provide a way to atomically read, update and remove branch pointers; and the \texttt{CONTENT\_ADDRESSABLE\_STORE} is an immutable store which will provide a way to store and fetch objects addressed by a deterministic hash--here commits, tree nodes and blobs.
+
+\bigskip
+This is strongly reminiscent of the internals of Git--with the \texttt{ATOMIC\_WRITE\_STORE} acting as the Git reference store and the several \texttt{CONTENT\_ADDRESSABLE\_STORE} together forming the Git content-addressable heap. For this reason, we will extend the notion of object graph defined above to Irmin backends and the objects that they store.
+
+\subsection{Garbage collection}
+
+Generally speaking, \emph{garbage collection} designates the techniques which automatically reclaim the memory occupied by objects which are no longer in use by a program. This alleviates the burden of manual memory management from the programmer, making it easier to write programs while also eliminating a large class of bugs--for instance \emph{dangling pointer} and \emph{double free} bugs.
+
+While the term \emph{garbage collection} is mostly used in the context of memory-managed programming languages, it can also be generalized to designate any system which automatically reclaims unused memory. In particular, the Git version control system is designed in such a way that aborting some operations or rolling back changes can leave unused objects in the database. To alleviate this issue, Git uses garbage collection to periodically find unused objects in the content-addressable heap and remove them from the disk--the garbage collector can also be explicitly called using \texttt{git\ gc}~\cite{git-gc}.
+
+Since Irmin shares its internal representation with Git, it also suffers from the same issue. To better illustrate the situation, let's look back at the database from \cref{fig:object-graph}. If we removed the \texttt{alpha} branch by calling \mintinline{ocaml}{Database.Branches.remove t "alpha"}, and subsequently rolled back the \texttt{master} branch to the initial commit by calling \mintinline{ocaml}{Database.Branches.set t "master" commit_707d4c8}, we would be left with the database from \cref{fig:object-graph-gc}--which contains two unused commits, two unused nodes, and an unused blob. Since these five objects can no longer be reached by the user, they could safely be removed from the database to free up disk space.
+
+\input{figures/object-graph-gc}
+
+\bigskip
+This brings us to the purpose of this internship: \emph{to design and implement a garbage collection scheme for Irmin}. With the context above in mind, this can be reformulated into the following: \emph{to design and implement a scheme which identifies unreachable objects in an Irmin object graph and removes them from their respective \texttt{CONTENT\_ADDRESSABLE\_STORE} to free up space.}
+
+\bigskip
+There were several constraints to take into account while designing this scheme--some of which are common to most garbage collection schemes~\cite{handbook}, while others are tied to the scale and performance requirements of Irmin, especially in the Tezos use case.
+
+\begin{itemize}
+  \item \emph{Safety.}
+        Most importantly, any garbage collection scheme should be \emph{safe}, meaning that the collector must never reclaim objects of the graph which are still accessible, or could become accessible later.
+
+  \item \emph{Completeness and promptness.}
+        Any garbage collection scheme should ideally be \emph{complete}, meaning that all garbage--unreachable objects--should be reclaimed. Note that it might not always be possible to reclaim all garbage at the end of every \emph{collection cycle}--see the section on \emph{Concurrent garbage collection} for details. Instead, some objects may become \emph{floating garbage}, meaning that they will only be reclaimed during a later cycle. This prompts an alternate definition of \emph{completeness} as the \emph{eventual} reclamation of all unreachable objects; and the introduction of \emph{promptness}: the number of \emph{collection cycles} required before an unreachable object can be reclaimed.
+
+  \item \emph{Low pause times.}
+        Most garbage collection schemes require the rest of the application to stop partially or entirely during a \emph{collection cycle}. While this requirement can be alleviated with \emph{concurrent garbage collection} techniques, it is generally impossible to avoid pauses entirely. Instead, a garbage collection scheme should try to stop the rest of the application for as little time as possible--although this usually requires a trade-off with promptness, throughput or memory overhead. This constraint was particularly significant during this internship, because some applications built using Irmin are particularly latency-critical--e.g.~Tezos nodes.
+
+  \item \emph{Low memory overhead.}
+        During a collection cycle, garbage collectors should use as little additional memory as possible. This was also a significant constraint during this internship, notably because the total memory usage of Irmin inside Tezos nodes is capped at a few hundred megabytes.
+
+  \item \emph{Low storage overhead.}
+        Collection scheme targeting Irmin should avoid storing additional data alongside objects--usually on disk--solely for the purpose of facilitating garbage collection. The reasoning behind this constraint is that some applications built using Irmin might not require the garbage collection feature, so we should not penalize them indirectly by increasing the disk usage of Irmin.
+
+  \item \emph{Modularity.}
+        Finally, since one of the key aspects of Irmin is modularity--see above for more details--the garbage collection scheme should be designed around the same idea. Practically, this means that garbage collection should work regardless of the particular storage backend used--whether in memory, on disk or in a pack-file--while accommodating for the specific trade-offs of each backend.
+\end{itemize}

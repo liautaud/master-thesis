@@ -1,0 +1,31 @@
+\begin{figure}[!ht]
+  \caption{Naïve partial collection using hash prefixes.}
+  \label{alg:partial-prefix}
+
+  \centering
+  \begin{lstlisting}
+# Run $2^\beta$ partial collection cycles.
+atomic Collect($\beta$):
+    for prefix in $\{0, 1\}^\beta$:
+        marked $\leftarrow$ mark(prefix)
+        backend.heap.Filter($\lambda$h. not startsWith(h, prefix) or h $\in$ marked)
+
+# Mark only the objects whose hashes match the given prefix.
+mark(prefix):
+    # Stack of all the grey objects.
+    pending $\leftarrow$ Roots()
+
+    # Set of all the black objects.
+    marked $\leftarrow$ $\emptyset$
+
+    while pending $\neq$ $\emptyset$:
+        o $\leftarrow$ pop(pending)
+        if startsWith(hash(o), prefix) and hash(o) $\not\in$ marked:
+            marked $\leftarrow$ marked $\cup$ {hash(o)}
+            pending $\leftarrow$ pending $\cup$ successors(o)
+        elif not startsWith(hash(o), prefix):
+            pending $\leftarrow$ pending $\cup$ successors(o)
+
+    return marked
+\end{lstlisting}
+\end{figure}
