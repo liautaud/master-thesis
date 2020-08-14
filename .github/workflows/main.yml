@@ -1,0 +1,53 @@
+name: Automatic LaTeX compilation
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+    - 'README.md'
+    - '.editorconfig'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout the right Git workspace.
+    - uses: actions/checkout@v2
+
+    # Declare a variable with the short hash.
+    - name: Declare some variables
+      id: vars
+      shell: bash
+      run: |
+        echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+
+    # Compile the LaTeX source using XeLaTeX.
+    - name: Compile LaTeX
+      id: compile_latex
+      uses: dante-ev/latex-action@master
+      with:
+        root_file: main.tex
+        args: -xelatex -latexoption=-file-line-error -latexoption=-interaction=nonstopmode
+
+    # Create a new GitHub release to store the PDF.
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: build-${{ steps.vars.outputs.sha_short }}
+        release_name: Automatic compilation.
+
+    # Upload the PDF to the previously created release.
+    - name: Upload PDF to release
+      id: upload_release_asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./main.pdf
+        asset_name: liautaud-master-thesis.pdf
+        asset_content_type: application/pdf

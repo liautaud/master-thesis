@@ -1,0 +1,1 @@
+$xelatex = 'xelatex  %O  --shell-escape %S';

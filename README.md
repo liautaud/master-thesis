@@ -2,13 +2,16 @@
 
 LaTeX sources for my Master thesis on the garbage collection of a decentralized data store.
 
+➡️ *The latest PDF release is available [here](https://github.com/liautaud/master-thesis/releases/download/latest/liautaud-master-thesis.pdf)*.
+
+
 ### Abstract.
 
 This thesis summarizes my internship work designing and implementing a garbage collection scheme for [Irmin](https://irmin.org/), a decentralized database library written in OCaml. It explores both the theoretical aspects of garbage collection and the practical challenges that come with implementation--mainly regarding pause time and memory efficiency.
 
 ### Acknowledgements.
 
-This thesis is the result of a six-month internship at [Tarides](https://tarides.com/) under the supervision of Clément Pascutto.  
+This thesis is the result of a six-month internship at [Tarides](https://tarides.com/) under the supervision of Clément Pascutto.
 It will be evaluated as part of my joint Master's degree between ENS de Lyon and EPFL.
 
 Credits:
