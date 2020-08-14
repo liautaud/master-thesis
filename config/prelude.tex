@@ -1,8 +1,6 @@
 %% Global configuration for the document.
 
-% Document geometry.
 \usepackage[a4paper, margin=0.7in, bottom=.8in]{geometry}
-
 \usepackage{graphicx}
 \usepackage{svg}
 \usepackage{minted}
@@ -12,7 +10,6 @@
 \usepackage{mathpazo}
 \usepackage[T1]{fontenc}
 \usepackage{fontspec}
-\usepackage{forest}
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{fancyvrb}
@@ -29,6 +26,7 @@
 \usepackage{enumitem}
 \usepackage{tabu}
 \usepackage{appendix}
+\usepackage{tikz}
 \usetikzlibrary{shapes,arrows}
 
 % Pseudocode listigs.
@@ -47,9 +45,15 @@
 \setminted{xleftmargin=2em}
 
 % Custom figure captions
-\DeclareCaptionFormat{customcap}{   \vspace{0.5em}   \linebreak   \setlength{\fboxsep}{4pt}   \colorbox{black!4}{%%%%%
+\DeclareCaptionFormat{customcap}{%
+  \vspace{0.5em}%
+  \linebreak%
+  \setlength{\fboxsep}{4pt}%
+  \colorbox{black!4}{%
     \hspace{-0.1em}%
-    \parbox{0.98\linewidth}{\centering \textit{#1}#2#3}}   \vspace{0.5em}}%
+    \parbox{0.98\linewidth}{%
+      \centering\textit{#1}#2#3}}%
+\vspace{0.5em}}%
 \captionsetup[figure]{format=customcap}
 
 % Figure margins
