@@ -5,24 +5,19 @@
   \centering
   \vspace{-1em}
   \begin{minted}{ocaml}
-val cleanup :
-  ?roots:[ `Branches | `List of commit list ] ->
-  ?limit_count:int ->
-  ?limit_time:float ->
-  t ->
-  (unit, [> `Run_again ]) result Lwt.t
-(** [cleanup ~roots t] runs the garbage collector on the object graph of
-    database [t]. All the commits, nodes and blobs which are not reachable
-    from [roots] will be deleted from their back-end stores.
+val cleanup : ?roots:[ `Branches | `List of commit list ] ->
+              ?limit_count:int -> ?limit_time:float -> t ->
+              (unit, [> `Run_again ]) result Lwt.t
+(** [cleanup t] runs the garbage collector on the object graph of database [t].
+    Every commit, node and blob which is not reachable from [?roots] will be deleted.
 
-    The collector is concurrent, meaning that collection can be interleaved
-    with other database operations. This is done via two mechanisms:
-    - The Lwt thread of the collector will yield on every I/O operation to
-      allow other threads to execute while waiting for results;
-    - The [?limit_count] and [?limit_time] options force the collector to
-      return after processing more than a limit number of objects or after
-      running for a limit number of seconds. In this case, the function will
-      return [Error `Run_again], and it will need to be run again at a later
-      time to finish collection. *)
+    The garbage collector is concurrent, so collection can safely be interleaved with
+    other database operations. This is done via two mechanisms:
+    - the Lwt thread of the collector will yield on every I/O operation to allow other
+      threads to execute while waiting for results;
+    - the [?limit_count] and [?limit_time] options force the collector to return after
+      processing more than a set number of objects or after running for a set number 
+      of seconds. In this case, the function will return [Error `Run_again], and it
+      will need to be run again at a later time to finish collection. *)
     \end{minted}
 \end{figure}

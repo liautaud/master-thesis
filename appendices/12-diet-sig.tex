@@ -1,10 +1,8 @@
-\begin{figure}[ht]
-  \caption{Abridged signature of a DIET interval set.}
-  \label{lst:diet-sig}
+\section{bridged signature of a DIET interval set.}
+\label{app:diet-sig}
 
-  \centering
-  \vspace{-1em}
-  \begin{minted}{ocaml}
+\centering
+\begin{minted}{ocaml}
 module type INTERVAL_SET = sig
   type elt
   (** The type of the set elements *)
@@ -31,5 +29,4 @@ module type INTERVAL_SET = sig
   val choose: t -> interval
   (** [choose t] returns one interval, or raises Not_found if the set is empty *)
 end
-    \end{minted}
-\end{figure}
+\end{minted}

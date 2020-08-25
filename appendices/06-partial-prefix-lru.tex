@@ -1,9 +1,8 @@
-\begin{figure}[!ht]
-  \caption{Cached partial collection using hash prefixes.}
-  \label{alg:partial-prefix-lru}
+\section{Cached partial collection using hash prefixes.}
+\label{app:partial-prefix-lru}
 
-  \centering
-  \begin{lstlisting}
+\centering
+\begin{lstlisting}
 # Run $2^\beta$ partial collection cycles.
 atomic Collect($beta$):
     for prefix in $\{0, 1\}^\beta$:
@@ -12,11 +11,8 @@ atomic Collect($beta$):
 
 # Mark only the objects whose hashes match the given prefix.
 mark(prefix):
-    # Stack of all the grey objects.
-    pending <- Roots()
-
-    # Set of all the black objects.
-    marked <- $\emptyset$
+    marked $\leftarrow$ $\emptyset$           # Set of all the black objects.
+    pending $\leftarrow$ Roots()   # Stack of all the grey objects.
 
     # Fixed-size LRU cache of already visited objects.
     visited <- $\emptyset$
@@ -33,4 +29,3 @@ mark(prefix):
 
     return marked
 \end{lstlisting}
-\end{figure}

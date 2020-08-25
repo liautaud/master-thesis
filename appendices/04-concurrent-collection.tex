@@ -1,9 +1,8 @@
-\begin{figure}[!ht]
-  \caption{Concurrent collection for the Irmin heap.}
-  \label{alg:concurrent-collection}
+\section{Pseudo-code implementation of concurrent collection for the Irmin heap.}
+\label{app:concurrent-collection}
 
-  \centering
-  \begin{lstlisting}
+\centering
+\begin{lstlisting}
 shared collecting $\leftarrow$ false    # Whether a collection cycle is already active.
 shared pending $\leftarrow$ $\emptyset$            # Stack of all the grey objects.
 shared marked $\leftarrow$ $\emptyset$             # Set of all the black objects.
@@ -53,4 +52,3 @@ atomic Update(ref, h):
     if hash(o) $\not\in$ marked:
         pending $\leftarrow$ pending $\cup$ {hash(o)}
 \end{lstlisting}
-\end{figure}

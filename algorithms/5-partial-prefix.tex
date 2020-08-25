@@ -2,6 +2,7 @@
   \caption{Naïve partial collection using hash prefixes.}
   \label{alg:partial-prefix}
 
+  \vspace{-.5em}
   \centering
   \begin{lstlisting}
 # Run $2^\beta$ partial collection cycles.
@@ -12,11 +13,8 @@ atomic Collect($\beta$):
 
 # Mark only the objects whose hashes match the given prefix.
 mark(prefix):
-    # Stack of all the grey objects.
-    pending $\leftarrow$ Roots()
-
-    # Set of all the black objects.
-    marked $\leftarrow$ $\emptyset$
+    marked $\leftarrow$ $\emptyset$           # Set of all the black objects.
+    pending $\leftarrow$ Roots()   # Stack of all the grey objects.
 
     while pending $\neq$ $\emptyset$:
         o $\leftarrow$ pop(pending)

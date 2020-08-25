@@ -19,44 +19,32 @@ val read : t -> off:int64 -> bytes -> int
 (** [find t ~off b] fills the buffer [b] with the contents of [t] between the
     offsets [off] and [off + size(b)]. Returns the number of bytes read. *)
 
-val offset : t -> int64
-(** [offset t] returns the current offset of the end of [t]. *)
-
-val append : t -> string -> unit
-(** [append t s] appends the bytes of [s] to the end of [t]. *)
-
-val clear : t -> unit
-(** [clear t] clears the contents of [t] by resetting its internal pointer. *)
+val offset : t -> int64          (** Returns the current end offset of [t]. *)
+val append : t -> string -> unit (** Appends bytes to the end of [t]. *)
+val clear : t -> unit            (** Clears the contents of [t]. *)
   \end{minted}
-
-        \input{figures/pack}
+        \vspace{-1em}
 
   \item
-        The \emph{dict}, shown in \cref{fig:dict}. It is also a single append-only file stored on disk, but is used solely to de-duplicate the names of paths when storing nodes. To illustrate this, imagine that an Irmin store has blobs stored at paths \texttt{foo/really\_long\_file\_name} and \texttt{bar/really\_long\_file\_name}. Instead of wasting space in the pack-file by storing the string \texttt{really\_long\_file\_name} twice, each step--here \texttt{foo}, \texttt{bar} and \texttt{really\_long\_file\_name}--is given a unique identifier, and the pairing between identifiers and steps is stored in the dict. For the sake of simplicity, we will ignore it in the algorithms to follow--it can be handled like the pack.
-
-        \input{figures/dict}
+        The \emph{dict}, which is also a single append-only file stored on disk, but is used solely to de-duplicate the names of paths when storing nodes. For the sake of simplicity, we will ignore it in the algorithms to follow--it can be handled like the pack.
 
   \item
         The \emph{index}, available as a standalone package at~\cite{index-github}. It is a multi-level index persisted on disk, and is used here to associate the hashes of objects with the offset at which they are encoded in the pack. For the sake of brevity, we won't get into details about its implementation; in what follows, we will simply treat it as a black-box with the following signature:
 
         \begin{minted}{ocaml}
-val clear : t -> unit
-(** [clear t] clears [t] so that there are no more bindings in it. *)
-
-val find : t -> key -> value
-(** [find t k] is the binding of [k] in [t]. *)
-
-val mem : t -> key -> bool
-(** [mem t k] is [true] iff [k] is bound in [t]. *)
+val clear : t -> unit         (** [clear t] removes all the bindings in [t]. *)
+val find : t -> key -> value  (** [find t k] is the binding of [k] in [t]. *)
+val mem : t -> key -> bool.   (** [mem t k] is [true] iff. [k] is bound in [t]. *)
 
 val replace : t -> key -> value -> unit
-(** [replace t k v] binds [k] to [v] in [t], replacing any existing binding of
-    [k]. *)
+(** [replace t k v] binds [k] to [v] in [t], replacing any existing binding of [k]. *)
 
 val iter : (key -> value -> unit) -> t -> unit
 (** [iter f t] iterates [f] over the bindings in [t]. *)
   \end{minted}
 \end{itemize}
+
+\input{figures/pack}
 
 With this in mind, \cref{app:pack-backend} gives a simplified implementation of the \texttt{CONTENT\_ADDRESSABLE\_STORE} interface for a pack-file backend.
 
@@ -66,7 +54,6 @@ To implement the \texttt{filter} function in the backend above, I first drew ins
 
 Transposing this idea to Irmin, we get the implementation from \cref{app:pack-copying}. It uses two sets of \texttt{Pack.t} and \texttt{Index.t}--one for each semispace. This is equivalent to splitting the pack and the index in two parts, but has the significant advantage that it doesn't require modifying the \texttt{Pack} and \texttt{Index} modules in any way. When \texttt{filter} is called, the backend iterates over all the entries in the current index--i.e.~over all the stored objects--and copies only those which pass the predicate \(p\) to the new index and pack.
 
-\bigskip
 This strategy has several advantages: first of all, it is straightforward enough that a bug-free implementation can realistically be produced even when dealing with concurrency or with single-writer multiple-reader parallelism. As mentioned above, it also doesn't require cluttering the behavior of \texttt{Index} and \texttt{Pack} with unrelated concerns. That said, it also has several drawbacks: first, its runtime is proportional to the number--more accurately to the total size--of elements stored in the backend, so calls to \texttt{filter} can quickly get expensive even when there are just a few objects to reclaim. Also, during a call to \texttt{filter}, the disk footprint of the backend can temporarily grow to twice its regular size--which might become a problem for large stores.
 
 \bigskip
@@ -85,10 +72,9 @@ While this strategy has the clear advantage of reducing the runtime and disk ove
 
 How fragmentation evolves over the lifespan of the backend depends mostly on the strategy being used to choose pairs from the free list when allocating an object of size \(length'\): the naive strategy, called \emph{first-fits}, picks the first \((offset, length)\) pair in the list such that \(length >= length'\), removes it from the list, and ``splits'' the corresponding area of memory by putting back \((offset + length', length - length')\) into the list. It should be clear that, when using this strategy, the free-list will become ``polluted'' over time with pairs such that \(length - length'\) is smaller than the size of most objects, leading to a lot a fragmentation. Among the better strategies, \emph{segregated-fits}~\cite{comf64} works by partitioning the set of possible object sizes into arbitrary \emph{size classes}, and uses a free list for each size class instead of a single one. Then, when \texttt{set} tries to find space for an object of size \(length'\), it only has to go through a single free list.
 
-\bigskip
 Unfortunately, even if allocation strategies like segregated-fits generally help reduce fragmentation, it can never be fully avoided when free lists are used; and the problem only grows with the number of calls to \texttt{filter} and \texttt{set}. To mitigate the issue, a good compromise is to use the lazy version of \texttt{filter} whenever possible, but to fall back to copying collection whenever fragmentation becomes too important--as a way to compact the ``holes'' in the pack. \cref{app:pack-lazy} provides an implementation of this hybrid strategy. It uses first-fits allocation for the sake of clarity, but can easily be extended to segregated-fits allocation. To keep track of fragmentation, it measures both the number of already reclaimed objects and the ratio between the size of black objects in the pack and the total size of the pack; and it chooses to run the \emph{compacting} version of \texttt{filter} whenever one of these metrics reach a predefined threshold.
 
-Another cause of concern with such a strategy is that writing to the pack-file at random offsets instead of only at its end could have a noticeable runtime overhead. To determine whether this could become a problem, I benchmarked the performance of disk operations on an SSD when using different access patterns and different file modes. The results are available in \cref{app:disk-access}--in short, although there is a noticeable overhead to calling \texttt{seek} then \texttt{write} sequentially when writing at random offsets in a file, it is actually coming from the fact that we are making two system calls rather than from the performance of the disk itself. One way to solve the issue was to use the \texttt{pwrite} system call instead--which combines \texttt{seek} and \texttt{write} into a single call.
+Another cause of concern with such a strategy is that writing to the pack-file at random offsets instead of only at its end could have a noticeable runtime overhead. To determine whether this could become a problem, I benchmarked the performance of disk operations on an SSD when using different access patterns and different file modes. The results are available in \cref{app:disk-access}--in short, although there is a noticeable overhead to calling \texttt{seek} then \texttt{write} sequentially when writing at random offsets in a file, it is actually coming from the fact that we are making two system calls rather than from the performance of the disk itself, which can be solved by using the combined \texttt{pwrite} system call instead.
 
 \subsection{Avoiding fragmentation by using interval trees}
 
@@ -97,21 +83,8 @@ Finally, I experimented with ways to significantly reduce the possibility of fra
 Interestingly enough, there are very few attempts at using structures other than linked lists for allocation in garbage collection literature. This is most likely due to the fact that allocators of memory-managed programming languages are incredibly performance-sensitive, and so the few extra CPU cycles needed to use a more complex data structure are generally prohibitive. In the case of pack-file backends for Irmin, however, this becomes a much more reasonable trade-off--not least because \texttt{set} generally writes to the disk, so the overhead of a few more CPU cycles becomes negligible.
 
 \bigskip
-For this experiment, I settled on using an OCaml implementation of Discrete Interval Encoding Trees~\cite{erwig89} available at~\cite{diet-github}, whose abridged signature is given in \cref{lst:diet-sig}. Concisely, this data structure uses a binary search tree to store sets of \emph{non-overlapping} discrete intervals. Note that this data structure is \emph{not} an interval tree, since the non-overlapping invariant means that adding \(\llbracket 1, 2 \rrbracket\) to the set \(\{\llbracket2, 3\rrbracket, \llbracket4, 5\rrbracket\}\) will give the set \(\{\llbracket1, 3]], \llbracket4, 5\rrbracket\}\). This is crucial to eliminate fragmentation in free-list backends, since we want contiguous reclaimed intervals of the pack to be merged together.
+For this experiment, I settled on using an OCaml implementation of Discrete Interval Encoding Trees~\cite{erwig89} available at~\cite{diet-github}, whose abridged signature is given in \cref{app:diet-sig}. Concisely, this data structure uses a binary search tree to store sets of \emph{non-overlapping} discrete intervals. Note that this data structure is \emph{not} an interval tree, since the non-overlapping invariant means that adding \(\llbracket 1, 2 \rrbracket\) to the set \(\{\llbracket2, 3\rrbracket, \llbracket4, 5\rrbracket\}\) will give the set \(\{\llbracket1, 3]], \llbracket4, 5\rrbracket\}\). This would eliminate some fragmentation in free-list backends, since contiguous reclaimed intervals of the pack would be merged together. Let \(n\) be the number of non-overlapping intervals in the DIET. This implementation uses \(O(n)\) storage, and provides \texttt{cardinal} and \texttt{choose} in \(O(1)\) runtime, while \texttt{add} and \texttt{remove} are in \(O(\log{n})\) on average but \(O(n)\) in the worst case.
 
-\input{listings/diet-sig}
+Given these operations, one can easily write \mintinline{ocaml}{extract : elt -> t -> (interval * t) option} in \(O(n)\), such that \mintinline{ocaml}{extract n t} tries to extract an interval of size \mintinline{ocaml}{n} from \mintinline{ocaml}{t}, and returns either \mintinline{ocaml}{Some (i, rest)} with \mintinline{ocaml}{rest = remove i t} or \mintinline{ocaml}{None} otherwise. It would then be trivial to replace the free list in the strategy above with a DIET which stores a single interval for every non-overlapping chunk of the pack which was previously reclaimed. The implementation of \texttt{filter} would call \texttt{add} every time it finds a white object to reclaim, leading to a \(O(r \log{r})\) runtime when there are \(r\) white objects in the graph--instead of \(O(r)\) when using a free-list. The implementation of \texttt{set} would then call \texttt{extract} with the size of the object to allocate, leading to the same \(O(l)\) runtime as with a free list--with \(l\) the number of intervals in the tree.
 
-Let \(n\) be the number of non-overlapping intervals in the DIET. This implementation uses \(O(n)\) storage, and provides \texttt{cardinal} and \texttt{choose} in \(O(1)\) runtime, while \texttt{add} and \texttt{remove} are in \(O(\log{n})\) on average but \(O(n)\) in the worst case.
-
-Given these operations, one can easily write a function with the following signature in \(O(n)\):
-
-\begin{minted}{ocaml}
-val extract : elt -> t -> (interval * t) option
-(** [extract n t] tries to extract an interval of size [n] from [t], and returns
-    either [Some (i, rest)] with [rest = remove i t] or [None] otherwise. *)
-\end{minted}
-
-\newpage
-With all of this in mind, it becomes trivial to replace the free list in the strategy above with a DIET which stores a single interval for every non-overlapping chunk of the pack which was previously reclaimed. The implementation of \texttt{filter} would call \texttt{add} every time it finds a white object to reclaim, leading to a theoretical \(O(r \log{r})\) runtime when there are \(r\) white objects in the graph--instead of \(O(r)\) when using a free-list. The implementation of \texttt{set} would then call the \texttt{extract} function with the size of the object to allocate, leading to the same \(O(l)\) runtime as with a free list--with \(l\) the number of intervals in the free-list.
-
-Summing up, replacing the free list with a DIET would significantly reduce the fragmentation caused by the free list in the previous strategy at the cost of a \(\log{r}\) factor during calls to \texttt{filter}; which is a reasonable trade-off given that \texttt{filter} will not be called frequently. To confirm the viability of the strategy, I benchmarked the runtime and storage overhead of DIET operations with a varying number of stored intervals--see \cref{app:diet-bench}. Notice that, even with \(10^4\) intervals in the structure, the runtime of all operations mostly stays an order of magnitude below that of a disk access; so the overhead of the DIET would be negligible.
+Summing up, replacing the free list with a DIET would reduce the fragmentation caused by the free list in the previous strategy at the cost of a \(\log{r}\) factor during calls to \texttt{filter}; which is reasonable given that \texttt{filter} will not be called frequently. To confirm the viability of the strategy, I benchmarked the runtime and storage overhead of DIET operations with a varying number of stored intervals--see \cref{app:diet-bench}. Notice that, even with \(10^4\) intervals in the structure, the runtime of all operations mostly stays an order of magnitude below that of a disk access; so the overhead of the DIET would be negligible.

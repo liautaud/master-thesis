@@ -3,43 +3,30 @@ open Type
 open Printf
 open Astring
 
-let src = Logs.Src.create "database" ~doc:"Database implementation"
-
-module Log = (val Logs.src_log src : Logs.LOG)
-
 let ( ++ ) = Int64.add
 
 let map_snd f = Lwt_list.map_p (fun (a, b) -> f b >|= fun b -> (a, b))
 
 module Make
-    (Hash : S.HASH)
-    (Backend : S.BACKEND)
-    (Branch_T : S.TYPE)
-    (Step_T : S.TYPE)
-    (Blob_T : S.TYPE) =
+    (Hash : S.HASH) (Backend : S.BACKEND)
+    (Branch_T : S.TYPE) (Step_T : S.TYPE) (Blob_T : S.TYPE) =
 struct
   (** {3 Basic type declarations.} *)
 
   type branch = Branch_T.t
-
   let branch_t = Branch_T.t
 
   type step = Step_T.t
-
   let step_t = Step_T.t
 
   type path = step list
 
   type blob = Blob_T.t
-
   let blob_t = Blob_T.t
 
   type tree = [ `Blob of blob | `Node of (step * tree) list ]
-
   type commit_hash = CH of string [@@unboxed] [@@deriving irmin]
-
   type node_hash = NH of string [@@unboxed] [@@deriving irmin]
-
   type blob_hash = BH of string [@@unboxed] [@@deriving irmin]
 
   let string_of_hash h =
@@ -57,13 +44,11 @@ struct
 
   module Commit_T = struct
     type t = commit
-
     let t = commit_t
   end
 
   module Node_T = struct
     type t = node
-
     let t = node_t
   end
 
@@ -82,13 +67,11 @@ struct
 
   module Graph_Label_T = struct
     type t = graph_label
-
     let t = graph_label_t
   end
 
   module Graph_Vertex_T = struct
     type t = graph_vertex
-
     let t = graph_vertex_t
 
     let print = function
@@ -296,163 +279,6 @@ struct
         | Some c -> Commits.of_hash w.t c
         | None -> invalid_arg "Head reference is not set." )
 
-  let get_tree w p =
-    let rec traverse p n =
-      match p with
-      | [] -> invalid_arg "Invalid path (should not be empty)."
-      | x :: xs -> (
-          match (List.assoc_opt x n, xs) with
-          | Some (`Node h), [] -> Nodes.of_hash w.t h >>= Nodes.tree w.t
-          | Some (`Node h), _ -> Nodes.of_hash w.t h >>= traverse xs
-          | Some (`Blob h), [] -> Blobs.of_hash w.t h >|= fun b -> `Blob b
-          | Some (`Blob _), _ -> invalid_arg "Invalid path (reached blob)."
-          | None, _ -> invalid_arg "Invalid path (no such child)." )
-    in
-
-    let%lwt c = head w in
-    let%lwt n = Commits.node w.t c in
-    traverse p n
-
-  let mem w p =
-    try%lwt
-      let%lwt _ = get_tree w p in
-      Lwt.return_true
-    with Invalid_argument _ -> Lwt.return_false
-
-  let get w p =
-    get_tree w p >|= function
-    | `Blob b -> b
-    | _ -> invalid_arg "Path doesn't point to a blob."
-
-  (** [update_head w h] sets the head of the current workspace to [h]. *)
-  let update_head w h =
-    match w.head with
-    | `Branch b -> Branches.set_commit_hash w.t b h
-    | `Head r ->
-        r := Some h;
-        Lwt.return_unit
-
-  (** [store_tree t tree] recursively stores [tree] in the node store of [t].
-      Returns the hash of the root node of [tree]. *)
-  let rec store_tree t tree =
-    match tree with
-    | `Blob b -> Blobs.set t b >|= fun h -> `Blob h
-    | `Node ns -> map_snd (store_tree t) ns >>= Nodes.set t >|= fun h -> `Node h
-
-  (** [merge_trees a b] recursively merges [a] and [b]. In case of a conflict,
-      the subtree from [b] is always used. *)
-  let rec merge_trees a b =
-    match (a, b) with
-    | `Node ca, `Node cb -> `Node (merge_children ca cb)
-    | _ -> b
-
-  and merge_children ca = function
-    | (p, b) :: bs -> (
-        match List.assoc_opt p ca with
-        | Some a -> (p, merge_trees a b) :: merge_children ca bs
-        | None -> (p, b) :: merge_children ca bs )
-    | [] -> ca
-
-  (** [update_node w p n] traverses the subtree starting at [n] until either:
-      (1) Reaching the node or blob [n'] at path [p]. (2) Reaching a dead end,
-      with the remaining path [p'].
-
-      On (1), [~on_found n'] is called and should return the hash of the updated
-      version of [n']. On (2), [~on_dead_end p'] is called and should return the
-      hash of the node to add at [p - p']. In any case, the update is propagated
-      recursively to the parents, and the hash of the updated version of [n] is
-      returned. *)
-  let update_node ~on_found ~on_dead_end t p n =
-    let fetch = function
-      | `Node hash -> Nodes.of_hash t hash >|= fun n -> `Node n
-      | `Blob hash -> Blobs.of_hash t hash >|= fun b -> `Blob b
-    in
-    let rec aux = function
-      | step :: steps, `Node children ->
-          (* Recursively update the children. *)
-          ( match List.assoc_opt step children with
-          | Some hash -> (
-              let others = List.remove_assoc step children in
-              fetch hash >>= fun child ->
-              aux (steps, child) >|= function
-              | Some child' -> (step, child') :: others
-              | None -> others )
-          | None -> (
-              on_dead_end steps >|= function
-              | Some child' -> (step, child') :: children
-              | None -> children ) )
-          >>= fun children' ->
-          (* Store the resulting node and store its hash. *)
-          Nodes.set t children' >|= fun h -> Some (`Node h)
-      | step :: steps, `Blob _ -> on_dead_end (step :: steps)
-      | [], n -> on_found n
-    in
-
-    aux (p, `Node n) >|= function
-    | Some (`Node h') -> h'
-    | _ -> invalid_arg "The path should not be empty."
-
-  let set_tree ?parents ?(message = "") ?(mode = `Merge) w p tree =
-    let%lwt head_commit = head w in
-    let%lwt head_node = Commits.node w.t head_commit in
-
-    (* When reaching the target node, store either [tree] or the merge between
-       [tree] and the previous tree depending on [mode], and return its hash. *)
-    let on_found n =
-      ( match n with
-      | `Blob _ -> store_tree w.t tree
-      | `Node n -> (
-          match mode with
-          | `Override -> store_tree w.t tree
-          | `Merge ->
-              Nodes.tree w.t n >>= fun old ->
-              store_tree w.t (merge_trees old tree) ) )
-      >|= fun c -> Some c
-    in
-
-    (* When a suffix [x / y / ... / z] of the path [p] isn't reachable, create
-       a tree with the shape [`Node [(x, `Node [(y, ... `Node [(z, tree)])])]],
-       store it, and return its hash. *)
-    let on_dead_end p =
-      store_tree w.t (List.fold_right (fun s c -> `Node [ (s, c) ]) p tree)
-      >|= fun c -> Some c
-    in
-
-    (* Store the updated nodes and the resulting commit. *)
-    let%lwt n = update_node ~on_found ~on_dead_end w.t p head_node in
-    let p =
-      match parents with
-      | Some p -> List.map Commits.to_hash p
-      | None -> [ Commits.to_hash head_commit ]
-    in
-    let c = { parents = p; node = n; message } in
-    let%lwt ch = Commits.set w.t c in
-    let%lwt () = update_head w ch in
-    Lwt.return c
-
-  let set ?parents ?(message = "") w p blob =
-    set_tree ?parents ~message w p (`Blob blob)
-
-  let remove ?parents ?(message = "") w p =
-    let%lwt head_commit = head w in
-    let%lwt head_node = Commits.node w.t head_commit in
-
-    (* Return None in both cases to request the deletion of the node. *)
-    let on_found _ = Lwt.return_none in
-    let on_dead_end _ = Lwt.return_none in
-
-    (* Store the updated nodes and the resulting commit. *)
-    let%lwt n = update_node ~on_found ~on_dead_end w.t p head_node in
-    let p =
-      match parents with
-      | Some p -> List.map Commits.to_hash p
-      | None -> head_commit.parents
-    in
-    let c = { parents = p; node = n; message } in
-    let%lwt ch = Commits.set w.t c in
-    let%lwt () = update_head w ch in
-    Lwt.return c
-
   (** {3 Operations on the object graph.} *)
 
   module Graph = struct
@@ -487,74 +313,6 @@ struct
         t =
       let pred = pred ~full t in
       OGraph.iter ?depth ~pred ~min ~max ~vertex ~edge ~skip ~rev ()
-
-    let export ?depth ?full ~min ~max ~name t buf =
-      (* Prepare stores for the Graphviz vertices and edges. *)
-      let vertices = Hashtbl.create 102 in
-      let add_vertex v l = Hashtbl.add vertices v l in
-      let mem_vertex v = Hashtbl.mem vertices v in
-      let edges = ref [] in
-      let add_edge v1 v2 l =
-        if mem_vertex v1 && mem_vertex v2 then edges := (v2, l, v1) :: !edges
-      in
-
-      (* Define formatting of Graphviz vertices and edges. *)
-      let trunc_of_hash h =
-        let h = string_of_hash h in
-        if String.length h <= 8 then h else String.with_range h ~len:8
-      in
-
-      let label_of_branch k =
-        Lwt.return (`Label (Irmin.Type.to_string branch_t k))
-      in
-      let label_of_commit (CH h) =
-        Commits.of_hash t (CH h) >|= fun c ->
-        `Label (sprintf "%s (%s)" (trunc_of_hash h) c.message)
-      in
-      let label_of_node (NH h) = Lwt.return (`Label (trunc_of_hash h)) in
-      let label_of_blob (BH h) =
-        Blobs.of_hash t (BH h) >|= fun b ->
-        `Label
-          (sprintf "%s (%s)" (trunc_of_hash h) (Irmin.Type.to_string blob_t b))
-      in
-      let label_of_step s = `Label (Irmin.Type.to_string step_t s) in
-
-      (* Traverse the object graph. *)
-      let vertex v =
-        match v with
-        | `Branch b ->
-            label_of_branch b >|= fun label ->
-            add_vertex (`Branch b) [ `Shape `Plaintext; `Style `Filled; label ]
-        | `Commit k ->
-            label_of_commit k >|= fun label ->
-            add_vertex (`Commit k) [ `Shape `Box; `Style `Bold; label ]
-        | `Node k ->
-            label_of_node k >|= fun label ->
-            add_vertex (`Node k) [ `Shape `Box; `Style `Dotted; label ]
-        | `Blob k ->
-            label_of_blob k >|= fun label ->
-            add_vertex (`Blob k) [ `Shape `Box; `Style `Dashed; label ]
-      in
-      let edge label v pred =
-        ( match (v, pred, label) with
-        | `Node _, `Node _, Some step ->
-            add_edge pred v [ `Style `Solid; label_of_step step ]
-        | `Node _, `Blob _, Some step ->
-            add_edge pred v [ `Style `Dotted; label_of_step step ]
-        | `Commit _, `Commit _, _ -> add_edge pred v [ `Style `Bold ]
-        | `Commit _, `Node _, _ -> add_edge pred v [ `Style `Dashed ]
-        | `Branch _, `Commit _, _ -> add_edge pred v [ `Style `Bold ]
-        | _ -> () );
-        Lwt.return_unit
-      in
-      let skip _ = Lwt.return false in
-      iter ?depth ?full ~min ~max ~vertex ~edge ~skip ~rev:true t >|= fun () ->
-      (* Use OCamlGraph to output the graph in Dot format. *)
-      let vertices = Hashtbl.fold (fun k v acc -> (k, v) :: acc) vertices [] in
-      let edges = !edges in
-
-      let ppf = Format.formatter_of_buffer buf in
-      OGraph.output ppf vertices edges name
 
     let mark ?(roots = `Branches) ?limit_count ?limit_time t =
       let count = ref 0 in

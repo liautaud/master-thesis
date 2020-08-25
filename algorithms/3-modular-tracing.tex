@@ -2,24 +2,22 @@
   \caption{Modular tracing collection.}
   \label{alg:modular-tracing}
 
+  \vspace{-.5em}
   \centering
   \begin{lstlisting}
 atomic Collect():
-    marked <- mark()
-    backend.heap.Filter(λh. h ∈ marked)
+    marked $\leftarrow$ mark()
+    backend.heap.Filter(λh. h $\in$ marked)
 
 mark():
-    # Stack of all the grey objects.
-    pending <- Roots()
+    marked $\leftarrow$ $\emptyset$           # Set of all the black objects.
+    pending $\leftarrow$ Roots()   # Stack of all the grey objects.
 
-    # Set of all the black objects.
-    marked <- ∅
-
-    while pending $\neq$ ∅:
-        o <- pop(pending)
-        if hash(o) ∉ marked:
-            marked <- marked ∪ {hash(o)}
-            pending <- pending ∪ successors(o)
+    while pending $\neq$ $\emptyset$:
+        o $\leftarrow$ pop(pending)
+        if hash(o) $\not\in$ marked:
+            marked $\leftarrow$ marked $\cup$ {hash(o)}
+            pending $\leftarrow$ pending $\cup$ successors(o)
 
     return marked
 \end{lstlisting}
