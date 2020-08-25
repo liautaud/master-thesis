@@ -1,9 +1,8 @@
-\begin{figure}[!ht]
-  \caption{Cached partial collection using Bloom filters.}
-  \label{alg:partial-bloom}
+\section{Cached partial collection using Bloom filters.}
+\label{app:partial-bloom}
 
-  \centering
-  \begin{lstlisting}
+\centering
+\begin{lstlisting}
 # Run a partial collection cycle with false positive probability $\epsilon$.
 atomic Collect($\epsilon$):
     marked $\leftarrow$ mark($\epsilon$)
@@ -34,4 +33,3 @@ mark($\epsilon$):
 
     return marked
 \end{lstlisting}
-\end{figure}

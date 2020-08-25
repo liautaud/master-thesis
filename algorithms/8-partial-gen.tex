@@ -2,6 +2,7 @@
   \caption{Partial collection of objects younger than $\theta$.}
   \label{alg:partial-gen}
 
+  \vspace{-.5em}
   \centering
   \begin{lstlisting}
 # Partial collection of objects younger than $\theta$.
@@ -11,11 +12,8 @@ atomic Collect($\Gamma$, $\theta$):
 
 # Mark the subgraph corresponding to objects younger than $\theta$.
 mark($\Gamma$, $\theta$):
-    # Stack of all the grey objects.
-    pending $\rightarrow$ Roots()
-
-    # Set of all the black objects.
-    marked $\rightarrow$ $\emptyset$
+    marked $\leftarrow$ $\emptyset$           # Set of all the black objects.
+    pending $\leftarrow$ Roots()   # Stack of all the grey objects.
 
     while pending $\neq$ $\emptyset$:
         o $\rightarrow$ pop(pending)

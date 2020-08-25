@@ -14,10 +14,12 @@ The internals of Git are described extensively in \emph{Git from the Bottom Up}~
 \input{figures/object-graph}
 
 \bigskip
-\cref{fig:object-graph} illustrates the state of the reference store and the content-addressable heap of a Git repository after performing the following operations in order: initializing an empty repository; adding a file called \texttt{old.txt} at the root of the repository; creating a commit with the message ``Initial commit''; moving \texttt{old.txt} to a new subfolder called \texttt{shared} and adding a file called \texttt{new.txt} to a new subfolder called \texttt{tmp}; creating a commit with the message ``Add new file''; creating to a new branch called \texttt{alpha}; and finally creating a rollback commit with the message ``Revert change''.
+\cref{fig:object-graph} illustrates the state of the reference store and content-addressable heap of a Git repository after performing the following operations in order: initializing an empty repository; adding a file called \texttt{old.txt} at the root of the repository; creating a commit with the message ``Initial commit''; moving \texttt{old.txt} to a new subfolder called \texttt{shared} and adding a file called \texttt{new.txt} to a new subfolder called \texttt{tmp}; creating a commit with the message ``Add new file''; creating to a new branch called \texttt{alpha}; and finally creating a rollback commit with the message ``Revert change''.
 
 \bigskip
-It becomes clear after looking at \cref{fig:object-graph} that the commits, tree nodes and blobs stored in the content-addressable heap form a directed graph \(G = (V, E)\) called the object graph. \(V\) is the set of \emph{graph objects}, defined precisely as:
+It becomes clear after looking at \cref{fig:object-graph} that the commits, tree nodes and blobs stored in the content-addressable heap form a directed graph \(G = (V, E)\) called the object graph.
+
+\(V\) is the set of \emph{graph objects}, defined precisely as:
 \begin{align*}
   V & \subset (\{\texttt{`Commit}\} \times H \times \mathcal{P}(H)) \\
     & \ \cup  (\{\texttt{`Node}\} \times \mathcal{P}(S \times H))   \\
@@ -47,15 +49,17 @@ Since the address of every object in the graph derived from the address of its p
 \emph{Irmin}~\cite{irmin} is an open-source distributed
 database library written in OCaml, which is maintained by Tarides~\cite{tarides} as part of the MirageOS~\cite{mirage}~\cite{mirage-paper} project. It allows developers to build branchable, mergeable distributed data stores; and supports--among other things--snapshotting, custom storage layers and custom datatypes. Introductory research material for Irmin can be found at \cite{irmin15} and \cite{irmin19}.
 
-Irmin was initially built as an extension of Xenstore~\cite{xenstore}, and has since been used as a backend for many OCaml applications, both within the MirageOS ecosystem--for instance in \texttt{mirage/arp}~\cite{mirage-arp}, \texttt{mirage/ocaml-dns}~\cite{mirage-dns} or \texttt{roburio/caldav}~\cite{roburio-caldav}--and outside of it, for instance in \emph{continuous integration} systems which build thousands of artefacts daily; or in the \emph{Docker for Desktop} client.
+Irmin was initially built as an extension of Xenstore~\cite{xenstore}, and has since been used as a backend for many OCaml applications, both within the MirageOS ecosystem--for instance in \texttt{mirage/arp}~\cite{mirage-arp}, \texttt{mirage/ocaml-dns}~\cite{mirage-dns} or \texttt{roburio/caldav}~\cite{roburio-caldav}--and outside of it, for instance in continuous integration systems which build thousands of artefacts daily; or in the reference \emph{Docker for Desktop} client.
 
 Notably, Irmin serves as the storage backend for nodes of the Tezos~\cite{tezos} blockchain, which was first described in~\cite{tezos14}. At the time of writing, this requires supporting the storage of roughly 350 million objects--for a total disk footprint of 37 GB. \emph{Up-to-date figures can be computed using the script at~\cite{tree-statistics}.}
 
-Practically, an Irmin database is created by supplying several modules to the \texttt{Irmin.Make} functor: the function used to hash objects; the storage backend; and the datatype of branch handles, node labels and blobs. Using the database is then akin to manipulating a Git repository: as illustrated in \cref{lst:irmin-example}, the user can initialize the database; checkout a branch; store one or many versioned values in the branch by creating a commit; etc. Since most operations result in the creation of a new commit, changes in an Irmin database are always non-destructive and can be rolled back safely if necessary. Similarly to Git, Irmin also provides an API to synchronize with remote databases using \texttt{push} and \texttt{pull} operations--although the specifics are out of the scope of this internship. \cref{app:irmin-interface} contains the full database interface for reference.
+Practically, an Irmin database is created by supplying several modules to the \texttt{Irmin.Make} functor: the function used to hash objects; the storage backend; and the datatype of branch handles, node labels and blobs. Using the database is then akin to manipulating a Git repository: as illustrated in \cref{lst:irmin-example}, the user can initialize the database; checkout a branch; store versioned values in the branch by creating a commit; etc. Since most operations result in the creation of a new commit, changes in an Irmin database are always non-destructive and can be rolled back safely if necessary. Similarly to Git, Irmin also provides an API to synchronize with remote databases using \texttt{push} and \texttt{pull} operations--although the specifics are out of the scope of this internship. \cref{app:irmin-interface} contains the full database interface for reference.
 
+\vspace{-.5em}
 \input{listings/irmin-example}
+\vspace{-1em}
 
-Note that, unless otherwise mentioned, all the code listings in this thesis are excerpts from the \texttt{irmin-toy}~\cite{irmin-toy-github} library instead of \texttt{irmin}~\cite{irmin-github}. It is a simplified model which I implemented from scratch during this internship, and which focuses only on the parts of Irmin that are relevant to my work.
+\textit{Note that, unless otherwise mentioned, all the code listings in this thesis are excerpts from the \texttt{irmin-toy}~\cite{irmin-toy-github} library instead of \texttt{irmin}~\cite{irmin-github}. It is a simplified model which I implemented from scratch during this internship, and which focuses only on the parts of Irmin that are relevant to my work.}
 
 \bigskip
 One of the key aspects of Irmin is \emph{modularity}: as highlighted at the beginning of \cref{lst:irmin-example}, the hash function, storage backend and object datatypes can be swapped for any other module--either provided by Irmin or user-defined--with the right signature. Irmin comes with a few storage backends out of the box: \texttt{irmin-mem}, which stores objects in a hashtable in memory; \texttt{irmin-fs}, which persists serialized objects on a POSIX filesystem; \texttt{irmin-git}, which provides a layer of compatibility with Git repositories; and \texttt{irmin-pack}, which persists serialized objects in a single large file similar to a block device. Storage backends must satisfy the interface from lines 398 to 581 of \cref{app:irmin-interface}: in short, they must provide both an \texttt{ATOMIC\_WRITE\_STORE} and a \texttt{CONTENT\_ADDRESSABLE\_STORE} implementation; the \texttt{ATOMIC\_WRITE\_STORE} is a mutable store which will provide a way to atomically read, update and remove branch pointers; and the \texttt{CONTENT\_ADDRESSABLE\_STORE} is an immutable store which will provide a way to store and fetch objects addressed by a deterministic hash--here commits, tree nodes and blobs.
@@ -76,7 +80,6 @@ Since Irmin shares its internal representation with Git, it also suffers from th
 \bigskip
 This brings us to the purpose of this internship: \emph{to design and implement a garbage collection scheme for Irmin}. With the context above in mind, this can be reformulated into the following: \emph{to design and implement a scheme which identifies unreachable objects in an Irmin object graph and removes them from their respective \texttt{CONTENT\_ADDRESSABLE\_STORE} to free up space.}
 
-\bigskip
 There were several constraints to take into account while designing this scheme--some of which are common to most garbage collection schemes~\cite{handbook}, while others are tied to the scale and performance requirements of Irmin, especially in the Tezos use case.
 
 \begin{itemize}

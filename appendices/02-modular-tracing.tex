@@ -51,21 +51,16 @@ let mark ?(roots = `Branches) t =
 let cleanup :
     ?roots:[ `Branches | `List of commit list ] -> t -> unit Lwt.t =
     fun ?roots t ->
-  Log.info (fun l -> l "Starting the garbage collector.");
-
   (* Start the tracing algorithm, and retrieve the black objects. *)
   Lwt_mutex.with_lock t.write_lock (fun () ->
     mark ?roots t >>= fun marked ->
       (* Filter the stores to keep only the black objects. *)
       Backend.Commits.filter (commits_store t) (fun k ->
-          OGraph.Table.mem marked
-            (`Commit (CH (Commit.Digest.serialize k))))
+          OGraph.Table.mem marked (`Commit (CH (Commit.Digest.serialize k))))
       >>= fun () ->
       Backend.Nodes.filter (nodes_store t) (fun k ->
-          OGraph.Table.mem marked
-            (`Node (NH (Node.Digest.serialize k))))
+          OGraph.Table.mem marked (`Node (NH (Node.Digest.serialize k))))
       >>= fun () ->
       Backend.Blobs.filter (blobs_store t) (fun k ->
-          OGraph.Table.mem marked
-            (`Blob (BH (Blob.Digest.serialize k)))))
+          OGraph.Table.mem marked (`Blob (BH (Blob.Digest.serialize k)))))
 \end{minted}

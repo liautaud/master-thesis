@@ -1,6 +1,6 @@
 \section{Garbage collection strategies}
 
-Although the idea of--and the challenges associated with--garbage collection in the context of Irmin differ slightly from what is usually found in litterature, my general approach during this internship was to start by looking there for ideas and algorithms, and then try to adapt them to our problem where relevant. Note that this approach was not always successful, notably because some usual assumptions about garbage collection might not apply to objects stored on Irmin backends which are orders of magnitude slower than RAM--e.g.~\texttt{irmin-fs} or \texttt{irmin-pack}. What follows is a quick summary of the terminology and the classical algorithms from garbage collection literature; and an initial attempt at transposing them to Irmin.
+While the idea of--and the challenges associated with--garbage collection in the context of Irmin differ slightly from what is usually found in literature, my general approach during this internship was to start by looking there for ideas and algorithms, and then try to adapt them to our problem where relevant. Note that this approach was not always successful, notably because some usual assumptions about garbage collection might not apply to objects stored on Irmin backends which are orders of magnitude slower than RAM--e.g.~\texttt{irmin-fs} or \texttt{irmin-pack}. What follows is a quick summary of the terminology and the classical algorithms from literature; and an initial attempt at transposing them to Irmin.
 
 \subsection{Terminology and classical algorithms}
 
@@ -39,7 +39,7 @@ Update(ref, h):
 
 \end{itemize}
 
-Broadly speaking, there are two families of garbage collection schemes: those based on \emph{reference counting} and those based on \emph{tracing}.
+Broadly speaking, there are two families of garbage collection schemes: those based on \emph{reference counting} and those based on \emph{tracing}. What follows is an overview of both families, and a review of their usability in the context of this internship.
 
 \subsubsection{Reference counting}
 
@@ -49,12 +49,11 @@ Broadly speaking, there are two families of garbage collection schemes: those ba
 
 \input{algorithms/1-ref-count}
 
-\newpage
 However, there are several downsides to reference counting which become problematic under our design constraints. First, it would require storing an integer alongside every object in the content-addressable heap, which would create a significant storage overhead. This integer would also have to be mutable, which would conflict with the current immutable semantics of the heap. Finally, reference counting might impact the performance of other mutator operations negatively and unpredictably--for instance, deleting a branch might trigger a cascade of count updates and object deletions which would result in an unexpected slowdown. For these reasons, I decided to explore tracing-based garbage collection schemes instead.
 
 \subsubsection{Tracing garbage collection}
 
-Instead of keeping track of which objects are reachable \emph{at any point in time} like reference counting schemes, \emph{tracing} schemes wait until the beginning of a collection cycle to traverse the entire object graph from the mutator roots, and find out which objects are reachable. This is an \emph{indirect} approach to garbage collection, as it does not identify garbage directly but rather concludes that every object which was not reached must be garbage.
+Instead of keeping track of which objects are reachable \emph{at any point in time} like reference counting schemes, \emph{tracing} schemes wait until a collection cycle to traverse the entire object graph from the roots, and find out which objects are reachable. This is an \emph{indirect} approach to garbage collection, as it does not identify garbage directly but rather concludes that every object which was not reached must be garbage.
 
 The most straightforward--and best-known--tracing scheme in literature is \emph{mark-and-sweep}, which was introduced by John McCarthy in 1960 as an implementation consideration for the LISP programming language~\cite{mccarthy60}. It operates in two phases: first the \emph{marking} phase, where it traverses the object graph from the roots and \emph{marks} all the objects it finds; and then the \emph{sweeping} phase, where it iterates over all the objects stored in the heap, reclaims those without a mark, and clears the remaining marks in anticipation for the next collection cycle.
 
@@ -62,12 +61,13 @@ To reason more easily about the state of objects during the marking phase, garba
 
 \cref{alg:mark-sweep} is a pseudo-code implementation of mark-and-sweep garbage collection using this abstraction. Notice that the \texttt{Collect} function is marked as \texttt{atomic}, and should therefore not execute concurrently with the mutator. In practice, this is achieved by stopping the mutator entirely during collection cycles--otherwise known in literature as ``stopping the world''.
 
+\vspace{-.5em}
 \input{algorithms/2-mark-sweep}
+\vspace{-.5em}
 
-\bigskip
 Assuming that \texttt{marked} uses a set data structure with amortized constant-time \texttt{add} and \texttt{find} operations, the \texttt{mark} function is in \(O(n' + m')\) with \(n'\) the number of objects and \(m'\) the number of edges in the subgraph \(G'\) of reachable objects from \(G\), and the \texttt{sweep} function is in \(O(n) * C_{Free}\) with \(n\) the number of objects in \(G\) and \(C_{Free}\) the time complexity of \texttt{Free}--which might vary depending on the implementation.
 
-Generally, mark-and-sweep collectors implement \texttt{Free} by adding the chunks of memory associated with white objects to a \emph{free-list}; and later traversing that list to find areas to allocate new objects to. Although this is sufficient most of the time, the resulting \emph{fragmentation} can be problematic when allocating large objects, as it might become impossible to find a \emph{contiguous} chunk of memory large enough for the object.
+Generally, mark-and-sweep collectors implement \texttt{Free} by adding the chunks of memory associated with white objects to a \emph{free-list}; and later traversing that list to find areas to allocate new objects to. Although this is sufficient most of the time, the resulting \emph{fragmentation} can be problematic when allocating a large object, as it might become impossible to find a \emph{contiguous} chunk of memory large enough for it.
 
 To alleviate this issue, schemes such as \emph{sliding compaction}--see Edward's Two-Finger~\cite{saunders74} collector--or \emph{semispace copying} were later introduced. They also operates in two phases: a \emph{marking} phase which is identical to the one in mark-and-sweep; and then a \emph{compaction} or \emph{copying} phase respectively. Although the specifics vary, this second phase rearranges the heap by either moving the black objects next to each other to force the white objects into a single chunk of unused memory; or by splitting it into two semispaces--only one of which is active at a given time--and copying all only the black objects the inactive semispace at the end of each collection cycle, to finally switch the role of the two semispaces atomically.
 
@@ -77,14 +77,17 @@ The modular nature of Irmin leaves us with an interesting problem: as mentioned 
 
 My approach to solving this problem was to notice that all variants of tracing collection can essentially be reduced to a marking phase followed by a ``reclaiming'' phase which uses the object colors assigned during marking to reclaim the space used by white objects. Thus, by factoring out the marking phase and delegating the ``reclaiming'' phase to the backends, we can avoid code duplication while still tailoring to the specific needs of backends.
 
+\bigskip
 Practically, this is achieved by extending the interface of backends--\texttt{CONTENT\_ADDRESSABLE\_STORE} to be precise--with a \texttt{filter} function as follows; how the backend implements \texttt{filter} is up to the developer.
 
+\vspace{.5em}
 \begin{minted}{ocaml}
 val filter : t -> (key -> bool) -> unit Lwt.t
 (** [filter t p] informs the content-addressable store that it can remove all
     values whose key [k] was added to the store before the call to [filter]
     and does not satisfy the predicate [p]. *)
 \end{minted}
+\vspace{.5em}
 
 Notice that \texttt{filter} receives a \texttt{key\ -\textgreater{}\ bool} predicate returning whether any given object is to be kept or reclaimed, which is a more general approach than simply passing the set of hashes of all the black objects. This approach unfortunately precludes the implementation of garbage collection schemes whose runtime is proportional to the number of reachable objects instead of the total number of objects--see~\cite{zorn90}; but it is a necessary trade-off to allow the implementation of the \emph{partial collection} schemes described in the later chapter on \emph{Memory-constrained marking}.
 
@@ -126,6 +129,4 @@ Assuming that we are using a 64-bit system, and given that object hashes are 256
 \bigskip
 In other words, calling \texttt{mark} on a graph with a million reachable objects would require at least \(56 MB\) of memory for \texttt{marked}, plus a maximum temporary overhead of of \(48L\) bytes for \texttt{pending} with \(L\) the maximum length of a path in the graph. For more details on what this implies, see the later chapter on \emph{Memory-constrained marking}.
 
-As for runtime, it was previously mentioned that \texttt{mark} theoretically runs in \(O(n' + m')\)--with \(n'\) the number of objects and \(m'\) the number of edges in the subgraph \(G'\) of reachable objects from \(G\). This is confirmed in practice, as the benchmark from \cref{fig:mark-benchmark} shows that the runtime of \texttt{mark} is linear in the number of objects in the graph. Notice that the coefficient varies depending on the backend currently being used--which makes sense, since fetching the objects on disk is obviously slower than in memory.
-
-\input{figures/mark-benchmark}
+As for runtime, it was previously mentioned that \texttt{mark} theoretically runs in \(O(n' + m')\)--with \(n'\) the number of objects and \(m'\) the number of edges in the subgraph \(G'\) of reachable objects from \(G\). This is confirmed in practice, as the benchmark from \cref{app:mark-benchmark} shows that the runtime of \texttt{mark} is linear in the number of objects in the graph. Notice that the coefficient varies depending on the backend currently being used--which makes sense, since fetching the objects on disk is obviously slower than in memory.

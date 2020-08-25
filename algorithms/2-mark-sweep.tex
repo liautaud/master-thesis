@@ -2,6 +2,7 @@
   \caption{Simple mark-and-sweep collection (adapted from Algorithm 2.1 of \cite{handbook}).}
   \label{alg:mark-sweep}
 
+  \vspace{-.5em}
   \centering
   \begin{lstlisting}
 atomic Collect():
@@ -9,11 +10,8 @@ atomic Collect():
     sweep(marked)
 
 mark():
-    # Stack of all the grey objects.
-    pending $\leftarrow$ Roots()
-
-    # Set of all the black objects.
-    marked $\leftarrow$ $\emptyset$
+    marked $\leftarrow$ $\emptyset$           # Set of all the black objects.
+    pending $\leftarrow$ Roots()   # Stack of all the grey objects.
 
     while pending $\neq$ $\emptyset$:
         o $\leftarrow$ pop(pending)

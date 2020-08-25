@@ -8,54 +8,43 @@ This chapter proposes three strategies that I devised to significantly reduce th
 
 \subsection{Partial collection using hash prefixes}
 
-In this first approach, we partition the graph objects into equal-sized subsets based on prefixes of their hashes and run a partial collection cycle for each of these subsets--where each partial cycle only marks objects which belong to its subset, implicitely treating all the other objects as if they were black.
+In this first approach, we partition the graph objects into equal-sized subsets based on prefixes of their hashes and run a partial collection cycle for each of these subsets--where each partial cycle only marks objects which belong to its subset, implicitly treating all the other objects as if they were black.
 
 Specifically, let us choose a \emph{prefix length} \(\beta \in \mathbb{N} \cap [1, 256]\), and let us assume that object hashes are distributed uniformly. On a given object graph \(G\), let \(\mu_G\) the maximum amount of memory allocated to the \texttt{marked} set during a collection cycle. We propose a partial collection scheme which allocates at most \(\frac{\mu_G}{2^\beta}\) to \texttt{marked}, but requires \(2^\beta\) complete collection cycles to reclaim all the unreachable objects. Note that, in this scheme, the worst-case runtime of a single collection cycle becomes quadratic in the number of objects in the graph--although this can be alleviated with methods described below.
 
-\cref{alg:partial-prefix} gives a first--naïve--version of the scheme. For the sake of simplicity, we describe the stop-the-world version only--the concurrent one can easily be derived using the insights from the chapter on \emph{Concurrent garbage collection}.
+\cref{alg:partial-prefix} gives a first--naïve--version of the scheme. For the sake of simplicity, we describe the stop-the-world version only--the concurrent one can easily be derived.
 
+\vspace{-.8em}
 \input{algorithms/5-partial-prefix}
+\vspace{-.8em}
 
-\bigskip
 As described above, each run of \texttt{mark(prefix)} partitions the objects of \(V\) into two sets \(\Pi\) and \(\bar{\Pi}\) corresponding respectively to the objects whose hashes start with \texttt{prefix} and to the rest. Only objects in \(\Pi\) get added to \texttt{marked} set, while objects in \(\bar{\Pi}\) are all treated as if they were black because of the \texttt{not\ startsWith(h,\ prefix)\ or\ h\ ∈\ marked} predicate. This leaves us with an issue: when we pick an object \(o \in \bar{\Pi}\) from the \texttt{pending} stack, we can't know whether or not we have already traversed \(o\) previoulsy, so we are forced to assume that we haven't. Although this is not critical--remember that the object graph is acyclic, so there is no risk of running into an infinite loop--the worst-case runtime of \texttt{mark} becomes quadratic in the number of objects.
 
-To try to alleviate this issue without increasing the memory usage of the algorithm too dramatically, I added a set of already \texttt{visited} objects implemented using a fixed-sized cache with a \emph{least-recently used} eviction strategy--the size can be adjusted depending on the amount of acceptable memory overhead, with the intuition that a larger cache will usually yield a faster runtime for \texttt{mark}. The choice of the LRU strategy over others--for instance \emph{least-frequently used}--mostly comes down to the fact that it is simple to implement efficiently and has \(O(1)\) insertion and lookup, while most other strategies are more complex and require at least \(O(\log{n})\). The final pseudo-code is given in \cref{alg:partial-prefix-lru}.
+To try to alleviate this issue without increasing the memory usage of the algorithm too dramatically, I added a set of already \texttt{visited} objects implemented using a fixed-sized cache with a \emph{least-recently used} eviction strategy--the size can be adjusted depending on the amount of acceptable memory overhead, with the intuition that a larger cache will usually yield a faster runtime for \texttt{mark}. The choice of the LRU strategy over others--for instance \emph{least-frequently used}--mostly comes down to the fact that it is simple to implement efficiently and has \(O(1)\) insertion and lookup, while most other strategies are more complex and require at least \(O(\log{n})\). The final pseudo-code is given in \cref{app:partial-prefix-lru}.
 
 % TODO: Plot the runtime of the collector when using LRU caches of varying sizes during collection (and update the text).
-
-\input{algorithms/6-partial-prefix-lru}
-
 % TODO: Plot the maximum memory usage of the collector when running partial collection on with varying \beta, versus normally.
 
 \subsection{Partial collection using Bloom filters}
 
-In this other approach, we replace the \texttt{marked} set of objects with a memory-efficient probabilistic set structure called a \emph{Bloom filter}~\cite{bloom70} which lets us known whether an object is either ``possibly black'' or ``definitely white''.
-
-Specifically, let us choose a \emph{false positive probability} \(\epsilon \in [0, 1]\). We propose a partial collection scheme which only uses \(m = -\frac{n\ln{\epsilon}}{(\ln{2})^2}\) bits for the \texttt{marked} set, with \texttt{n} the total number of objects in the graph, and which reclaims unreachable objects with probability \(\epsilon\).
+In this other approach, we replace the \texttt{marked} set of objects with a memory-efficient probabilistic set structure called a \emph{Bloom filter}~\cite{bloom70} which lets us known whether an object is either ``possibly black'' or ``definitely white''. Specifically, let us choose a \emph{false positive probability} \(\epsilon \in [0, 1]\). We propose a partial collection scheme which only uses \(m = -\frac{n\ln{\epsilon}}{(\ln{2})^2}\) bits for the \texttt{marked} set, with \texttt{n} the total number of objects in the graph, and which reclaims unreachable objects with probability \(\epsilon\).
 
 \bigskip
 Let us start with a quick introduction to Bloom filters. Given \(m \in \mathbb{N}\) a number of bits, and \(k \in \mathbb{N}\) hash functions \((h_i)_{1 \leq i \leq k}\)--which we assume to be independent; a Bloom filter of parameters \((m, k)\) is a probabilistic set data structure which uses a bit array of size \(m\) to answer queries without false negatives. The bit array is initially filled with zeroes; to insert an element \(x\) into the filter in \(O(k)\), we successively compute \(h_1(x), \dots, h_k(x) \in [[1, m]]\) and set the bits at these position in the bit array to \(1\); finally, to test whether or not an element \(y\) is in the filter in \(O(k)\), we also compute \(h_1(y), \dots, h_k(y)\) and return \texttt{false} iff. any of the bits at these position is \(0\)--so we might return false positives, but never false negatives. Assuming that the hash functions are uniform and independent, a quick calculation gives a false positive probability of\(\epsilon = (1 - \frac{1}{m})^k\). Conversely, for a given error probability \(\epsilon\) and an estimated number of elements \(n\), we can compute that the optimal values of \(k\) and \(m\) are \(k = \frac{m}{n} \ \ln{2}\) and \(m = -\frac{n \ln{\epsilon}}{(\ln{2})^2}\).
 
-\bigskip
-With this in mind, \cref{alg:partial-bloom} gives the pseudo-code for the scheme.
+With this in mind, \cref{app:partial-bloom} gives the pseudo-code for the scheme.
 
-\input{algorithms/7-partial-bloom}
-
-\bigskip
 Clearly, since Bloom filters never return false negatives, this scheme is safe--an object can never be treated as white while still being reachable. However, notice that we run into the same problem as the previous scheme: since Bloom filters return false positives, we can never know reliably whether or not we have already traversed a given previously, so we are forced to assume that we haven't. As previously, this means that the worst-case runtime of \texttt{mark} becomes quadratic in the number of objects, but this is somewhat alleviated by the use of a fixed-size LRU cache.
 
 Notice the call to \texttt{newSeed()} when creating the filter, which changes the seed used by the hash functions of the filter at the beginning of each collection cycle. This is done to ensure the completeness of the garbage collection scheme, as there might otherwise exist some unreachable object \(o \in V\) such that \(hash(o)\) always triggers a false positive in the filter; and so it would never get reclaimed. By using a new seed for each cycle, we pick a new set of false positives, and so--assuming uniformity--the probability that an unreachable objects doesn't get reclaimed after \(q\) cycles becomes \(\epsilon^q\).
-
-% TODO: Provide an OCaml implementation of the scheme as an appendix.
 
 % TODO: Plot the maximum memory usage of the collector when running partial collection using a Bloom filter with varying percents of accuracy, versus normally.
 
 \subsection{Generational collection}
 
-In this last approach, we draw inspiration from \emph{generational garbage collection} schemes and only reclaim young objects--avoiding older portions of the object graph entirely. When used appropriately, this approach can significantly reduce the amount of memory allocated to \texttt{marked} and \texttt{pending} during marking while avoiding the quadratic worst-case runtime of the two previous approaches--as well as the need for an LRU cache.
+In this last approach, we draw inspiration from \emph{generational garbage collection} schemes and only reclaim young objects--avoiding older portions of the graph entirely. When used appropriately, this approach can significantly reduce the amount of memory allocated to \texttt{marked} and \texttt{pending} during marking while avoiding the quadratic worst-case runtime and LRU cache of the two previous approaches.
 
-\bigskip
-Before describing the scheme in details, let us start with a bit of context. Generational garbage collection is built around the \emph{weak generational hypothesis}--sometimes known as the \emph{infant mortality hypothesis}--which speculates that most objects in a garbage-collected system die young. This hypothesis appears to be valid in the context of memory-managed languages, as demonstrated for example in~\cite{zorn89} for programs written in Common Lisp or~\cite{dieck99} for programs written in Java. Interestingly, this hypothesis also makes intuitive sense in some use cases of Irmin. For instance, the decentralized consensus algorithm of the Tezos blockchain--or most blockchains for that matter--is designed in such a way that multiple parallel chains of blocks might co-exist for a while, but only the chain with the best score--usually the longest--will eventually become the ``canonical'' chain. Because of this, young blocks which are added to soon-to-be-discarded chains might be broadcasted to all nodes and get stored, only to become quickly unreachable once consensus is reached; whereas old blocks have a greater change of belonging to the ``canonical'' chain, and will likely never become unreachable.
+Before describing the scheme in details, let us start with a bit of context. Generational garbage collection is built around the \emph{weak generational hypothesis}--sometimes known as the \emph{infant mortality hypothesis}--which speculates that most objects in a garbage-collected system die young. This hypothesis appears to be valid in the context of memory-managed languages, as demonstrated for example in~\cite{zorn89} for programs written in Common Lisp or~\cite{dieck99} for programs written in Java. Interestingly, this hypothesis also makes intuitive sense in some use cases of Irmin. For instance, most blockchains are designed in such a way that multiple parallel chains of blocks might co-exist for a while, but only the chain with the best score--usually the longest--will eventually become the ``canonical'' chain. Because of this, young blocks which are added to soon-to-be-discarded chains might be broadcasted to all nodes and get stored, only to become quickly unreachable once consensus is reached; whereas old blocks have a greater change of belonging to the ``canonical'' chain, and will likely never become unreachable.
 
 To exploit this idea, we need to define a concept of \emph{object generation}. We say that a function \(\Gamma : H \rightarrow \mathbb{N}\) is a \emph{generation measure} iff. \(\forall o \in V,\ \forall h \in \texttt{successors}(o), \Gamma(\texttt{hash}(o)) \geq \Gamma(h)\). In other words, \(\Gamma\) must preserve the reverse topological ordering of \(G\). Notice that, since the inequality is not strict, a trivial--but not really useful--measure would be the constant \(0\). Intuitively, objects with a small \(\Gamma(o)\) are ``old'', and objects with a large \(\Gamma(o)\) are ``young''.
 
@@ -65,7 +54,4 @@ With this in mind, let us choose a generation measure \(\Gamma\) as well as an o
 
 \input{algorithms/8-partial-gen}
 
-% TODO: Provide an OCaml implementation of the scheme as an appendix.
-
-\bigskip
-Notice that \texttt{mark} ignores all the paths starting from an object \(o \in V\) as soon as \(\Gamma(\texttt{hash}(o)) < \Gamma(hash(θ))\): this is correct by definition of \(\Gamma\), since any direct or indirect successor \(o'\) of \(o\) will be such that \(\Gamma(\texttt{hash}(o')) <= \Gamma(\texttt{hash}(o)) < \Gamma(hash(θ))\). This also means that unlike the previous two, this strategy doesn't have a quadratic worst-case runtime nor require an LRU cache, since we can reliably know if we have already traversed an object as long as it is younger than \(\theta\).
+Notice that \texttt{mark} ignores all the paths starting from an object \(o \in V\) as soon as \(\Gamma(\texttt{hash}(o)) < \Gamma(hash(θ))\): this is correct by definition of \(\Gamma\), since any direct or indirect successor \(o'\) of \(o\) will be such that \(\Gamma(\texttt{hash}(o')) \leq \Gamma(\texttt{hash}(o)) < \Gamma(hash(θ))\). This also means that unlike the previous two, this strategy doesn't have a quadratic worst-case runtime nor require an LRU cache, since we can reliably know if we have already traversed an object as long as it is younger than \(\theta\).
